@@ -12,6 +12,8 @@
             --bg-panel: #1a1d29;
             --neon-cyan: #00f3ff;
             --text-light: #e2e8f0;
+            --success-green: #10b981;
+            --error-red: #ef4444;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
@@ -24,10 +26,8 @@
         .title-group p { font-size: 10px; color: #a0aec0; }
         
         .status-container { display: flex; gap: 6px; }
-        .status-pill { display: flex; align-items: center; gap: 5px; background: #1e293b; color: #94a3b8; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; border: 1px solid #334155; }
-        .status-pill.ready { background: #064e3b; color: #34d399; border-color: #047857; }
-        .dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; }
-        .status-pill.ready .dot { background: #34d399; }
+        .status-pill { display: flex; align-items: center; gap: 5px; background: #064e3b; color: #34d399; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; border: 1px solid #047857; }
+        .dot { width: 6px; height: 6px; background: #34d399; border-radius: 50%; }
 
         /* SCANNER VIEWPORT */
         .scanner-container { 
@@ -62,6 +62,17 @@
             border-radius: 4px;
             z-index: 2;
             pointer-events: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .tunnel-mask.flash-success {
+            border-color: var(--success-green) !important;
+            box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98), 0 0 15px var(--success-green);
+        }
+
+        .tunnel-mask.flash-error {
+            border-color: var(--error-red) !important;
+            box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98), 0 0 15px var(--error-red);
         }
 
         .tunnel-label { 
@@ -77,6 +88,7 @@
             background: rgba(0,0,0,0.85); 
             padding: 2px 8px; 
             border-radius: 4px; 
+            transition: color 0.2s;
         }
         
         .laser-line { 
@@ -131,8 +143,10 @@
             display: flex; justify-content: center; align-items: center; gap: 8px;
             box-shadow: 0 4px 12px rgba(255, 183, 3, 0.3);
             cursor: pointer;
+            transition: opacity 0.1s;
         }
         #scan-btn:active { transform: scale(0.97); }
+        #scan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
         .counter-box { background: var(--bg-panel); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 70px; border: 1px solid #2d3748; }
         .counter-box span { font-size: 9px; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
@@ -174,7 +188,7 @@
             </div>
         </div>
         <div class="status-container">
-            <div class="status-pill" id="db-status"><div class="dot"></div> DB</div>
+            <div class="status-pill"><div class="dot"></div> API Sync</div>
             <div class="status-pill" id="ocr-status"><div class="dot"></div> OCR</div>
         </div>
     </header>
@@ -182,7 +196,7 @@
     <div class="scanner-container" id="scanner-box">
         <video id="camera-feed" autoplay playsinline muted></video>
         <div class="tunnel-mask" id="tunnel-hole">
-            <div class="tunnel-label">KARTENNAME HIER</div>
+            <div class="tunnel-label" id="tunnel-label-txt">KARTENNAME HIER</div>
             <div class="laser-line"></div>
         </div>
         
@@ -196,7 +210,7 @@
 
     <div class="list-container">
         <div class="list-header">
-            <span>📋 Live-Liste (ohne Bestätigung)</span>
+            <span>📋 Live-Liste (Verifizierte Karten)</span>
             <button class="clear-btn" onclick="clearList()">Liste leeren</button>
         </div>
         <ul id="card-list-ui"></ul>
@@ -223,43 +237,80 @@
 
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <div id="loading-text">Gleiche Datenbank ab...</div>
+        <div id="loading-text">Verarbeite...</div>
     </div>
 
     <script>
         let video = document.getElementById('camera-feed');
         let tunnelHole = document.getElementById('tunnel-hole');
+        let tunnelLabel = document.getElementById('tunnel-label-txt');
         let debugCanvas = document.getElementById('debug-canvas');
         let torchBtn = document.getElementById('torch-btn');
         let scannerBox = document.getElementById('scanner-box');
+        let scanBtn = document.getElementById('scan-btn');
         
         let worker = null;
         let cardList = [];
         let videoTrack = null;
         let torchEnabled = false;
 
-        // In-Memory Card Database für Instant-Fuzzy-Matching
-        let dbCards = []; // Array von { cleanName: "kashtira fenrir", realName: "Kashtira Fenrir", id: 12345, isExtra: false }
+        // Persistenter lokaler Cache (Karten müssen nur 1x online geprüft werden)
+        let verifiedCardsMap = new Map();
+        try {
+            const saved = localStorage.getItem('ygo_verified_cache_v2');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                for (const [k, v] of Object.entries(parsed)) verifiedCardsMap.set(k, v);
+            }
+        } catch(e){}
+
+        function saveCacheEntry(normKey, cardObj) {
+            verifiedCardsMap.set(normKey, cardObj);
+            try {
+                const obj = Object.fromEntries(verifiedCardsMap);
+                localStorage.setItem('ygo_verified_cache_v2', JSON.stringify(obj));
+            } catch(e){}
+        }
 
         const renderCanvas = document.createElement('canvas');
         const renderCtx = renderCanvas.getContext('2d', { willReadFrequently: true });
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playBeep(success = true) {
+        function playFeedbackSound(success = true) {
             if(audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'sine';
-            const f = success ? 900 : 300;
+            const f = success ? 1046 : 220; // Hohes C (Erfolg) oder tiefer Brummton (Fehler)
             osc.frequency.setValueAtTime(f, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(f + (success ? 300 : -100), audioCtx.currentTime + 0.08);
+            if (success) {
+                osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.1);
+            } else {
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime + 0.06);
+            }
             gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (success ? 0.1 : 0.12));
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.08);
-            if (navigator.vibrate) navigator.vibrate(success ? 40 : [30, 50, 30]);
+            osc.stop(audioCtx.currentTime + (success ? 0.1 : 0.12));
+            if (navigator.vibrate) navigator.vibrate(success ? 45 : [30, 40, 30]);
+        }
+
+        function triggerFlash(success = true, msg = "") {
+            tunnelHole.classList.remove('flash-success', 'flash-error');
+            void tunnelHole.offsetWidth; // Reflow trigger
+            tunnelHole.classList.add(success ? 'flash-success' : 'flash-error');
+            
+            if (msg) {
+                tunnelLabel.innerText = msg;
+                tunnelLabel.style.color = success ? '#34d399' : '#f87171';
+            }
+            setTimeout(() => {
+                tunnelHole.classList.remove('flash-success', 'flash-error');
+                tunnelLabel.innerText = "KARTENNAME HIER";
+                tunnelLabel.style.color = "#fff";
+            }, 1200);
         }
 
         async function startCamera() {
@@ -288,193 +339,250 @@
             torchBtn.style.background = torchEnabled ? 'rgba(255, 183, 3, 0.4)' : 'rgba(20, 24, 35, 0.85)';
         }
 
-        // LÄDT ALLE KARTENNAMEN (Lokal gecacht via IndexedDB / LocalStorage)
-        async function loadCardDatabase() {
-            const dbStatus = document.getElementById('db-status');
-            try {
-                // Schneller Abruf des schlanken YGO-Card-Index (nur Name, ID und Type)
-                const cache = localStorage.getItem('ygo_card_db_v1');
-                if (cache) {
-                    dbCards = JSON.parse(cache);
-                    dbStatus.classList.add('ready');
-                    return;
-                }
-
-                const res = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php');
-                const data = await res.json();
-                if (data && data.data) {
-                    dbCards = data.data.map(c => {
-                        const t = c.type.toLowerCase();
-                        return {
-                            cleanName: c.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
-                            realName: c.name,
-                            id: c.id,
-                            isExtra: t.includes('fusion') || t.includes('synchro') || t.includes('xyz') || t.includes('link')
-                        };
-                    });
-                    // In LocalStorage sichern für Instant-Start nächstes Mal
-                    try { localStorage.setItem('ygo_card_db_v1', JSON.stringify(dbCards)); } catch(e){}
-                    dbStatus.classList.add('ready');
-                }
-            } catch (e) {
-                console.warn("DB Offline/Ladefehler:", e);
-                dbStatus.innerText = "DB Offline";
-            }
-        }
-
         async function initOCR() {
             try {
                 worker = await Tesseract.createWorker(['deu', 'eng']);
                 await worker.setParameters({
                     tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
-                    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß0123456789 -,'"
+                    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß0123456789 -,'&!"
                 });
                 const ocrStatus = document.getElementById('ocr-status');
                 ocrStatus.classList.add('ready');
-                document.getElementById('scan-btn').disabled = false;
+                scanBtn.disabled = false;
             } catch (e) {
                 document.getElementById('ocr-status').innerText = 'OCR Error';
             }
         }
 
         startCamera();
-        loadCardDatabase();
         initOCR();
 
-        // 1-Klick-Erkennung mit Instant-Fuzzy-Matcher
+        // CAPTURE UND VERIFIZIERUNG
         async function captureAndScan() {
-            if (!worker || video.videoWidth === 0) return;
+            if (!worker || video.videoWidth === 0 || scanBtn.disabled) return;
 
-            const cW = scannerBox.clientWidth;
-            const cH = scannerBox.clientHeight;
-            const vW = video.videoWidth;
-            const vH = video.videoHeight;
+            scanBtn.disabled = true;
+            scanBtn.innerText = "⏳ ERKENNE...";
 
-            const scale = Math.max(cW / vW, cH / vH);
-            const rW = vW * scale;
-            const rH = vH * scale;
-            const rX = (cW - rW) / 2;
-            const rY = (cH - rH) / 2;
+            try {
+                const cW = scannerBox.clientWidth;
+                const cH = scannerBox.clientHeight;
+                const vW = video.videoWidth;
+                const vH = video.videoHeight;
 
-            renderCanvas.width = cW;
-            renderCanvas.height = cH;
-            renderCtx.drawImage(video, rX, rY, rW, rH);
+                const scale = Math.max(cW / vW, cH / vH);
+                const rW = vW * scale;
+                const rH = vH * scale;
+                const rX = (cW - rW) / 2;
+                const rY = (cH - rH) / 2;
 
-            const boxRect = tunnelHole.getBoundingClientRect();
-            const contRect = scannerBox.getBoundingClientRect();
+                renderCanvas.width = cW;
+                renderCanvas.height = cH;
+                renderCtx.drawImage(video, rX, rY, rW, rH);
 
-            const cropX = boxRect.left - contRect.left;
-            const cropY = boxRect.top - contRect.top;
-            const cropW = boxRect.width;
-            const cropH = boxRect.height;
+                const boxRect = tunnelHole.getBoundingClientRect();
+                const contRect = scannerBox.getBoundingClientRect();
 
-            debugCanvas.width = cropW * 2;
-            debugCanvas.height = cropH * 2;
-            const dCtx = debugCanvas.getContext('2d');
-            dCtx.imageSmoothingEnabled = true;
-            dCtx.imageSmoothingQuality = 'high';
-            dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
+                const cropX = boxRect.left - contRect.left;
+                const cropY = boxRect.top - contRect.top;
+                const cropW = boxRect.width;
+                const cropH = boxRect.height;
 
-            const result = await worker.recognize(debugCanvas);
-            const rawText = result.data.text.trim();
+                debugCanvas.width = cropW * 2;
+                debugCanvas.height = cropH * 2;
+                const dCtx = debugCanvas.getContext('2d');
+                dCtx.imageSmoothingEnabled = true;
+                dCtx.imageSmoothingQuality = 'high';
+                dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
 
-            if (rawText.length < 3) {
-                playBeep(false);
-                return;
-            }
+                const result = await worker.recognize(debugCanvas);
+                const rawText = (result.data.text || '').trim();
 
-            // Sofortige Fuzzy-Korrektur gegen die Datenbank
-            const matchedName = matchAgainstDatabase(rawText);
+                // STRIKTER ABGLEICH: Nur geprüfte Karten werden zugelassen!
+                const matchedCard = await resolveCardFromDatabase(rawText);
 
-            if (matchedName) {
-                playBeep(true);
-                cardList.push(matchedName);
-                updateUI();
-            } else {
-                // Fallback: Wenn Karte neu ist oder DB nicht geladen, nimm gereinigten Text
-                const fallback = cleanRaw(rawText);
-                if (fallback.length >= 4) {
-                    playBeep(true);
-                    cardList.push(fallback);
+                if (matchedCard) {
+                    playFeedbackSound(true);
+                    triggerFlash(true, `✓ ${matchedCard.realName}`);
+                    cardList.push(matchedCard);
                     updateUI();
                 } else {
-                    playBeep(false); // Unsinniger Scan (ur wo etc.) lautlos/mit Fehlerton verworfen!
+                    // Verworfener Scan: KEIN MÜLL WIRD IN DIE LISTE GESCHRIEBEN!
+                    playFeedbackSound(false);
+                    triggerFlash(false, "Nicht erkannt – Fokus halten");
                 }
+            } catch(err) {
+                console.warn(err);
+                playFeedbackSound(false);
+            } finally {
+                scanBtn.disabled = false;
+                scanBtn.innerText = "◉ ABDRUCK SCANNEN";
             }
         }
 
-        // LEVENSHTEIN / N-GRAM INSTANT FUZZY MATCHER (< 5 ms)
-        function matchAgainstDatabase(rawInput) {
-            if (!dbCards || dbCards.length === 0) return null;
+        // DATABASE RESOLVER MIT FUZZY-MATCHING (100% EXAKTE KARTENNAMEN)
+        async function resolveCardFromDatabase(raw) {
+            const clean = raw
+                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,'&]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
 
-            const query = rawInput.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (query.length < 3) return null;
+            if (clean.length < 3) return null;
 
-            let bestMatch = null;
-            let highestSimilarity = 0;
+            const normKey = normalize(clean);
+            if (verifiedCardsMap.has(normKey)) {
+                return verifiedCardsMap.get(normKey);
+            }
 
-            for (let i = 0; i < dbCards.length; i++) {
-                const c = dbCards[i];
-                // 1. Direkter Substring-Treffer
-                if (c.cleanName === query) {
-                    return c.realName;
+            // 1. Exakter Datenbank-Match (Englisch & Deutsch)
+            let card = await fetchExact(clean);
+            if (card) {
+                saveCacheEntry(normKey, card);
+                return card;
+            }
+
+            // 2. Exakter Match ohne Zahlen-/Sonderzeichen-Rauschen an den Rändern (z.B. "Kashtira Fenrir 8" -> "Kashtira Fenrir")
+            const trimmedNoise = clean.replace(/^[0-9\W]+|[0-9\W]+$/g, '').trim();
+            if (trimmedNoise !== clean && trimmedNoise.length >= 3) {
+                const trimmedNorm = normalize(trimmedNoise);
+                if (verifiedCardsMap.has(trimmedNorm)) {
+                    const c = verifiedCardsMap.get(trimmedNorm);
+                    saveCacheEntry(normKey, c);
+                    return c;
                 }
-                
-                // 2. Ähnlichkeitsberechnung
-                const sim = similarity(query, c.cleanName);
-                if (sim > highestSimilarity) {
-                    highestSimilarity = sim;
-                    bestMatch = c.realName;
+                card = await fetchExact(trimmedNoise);
+                if (card) {
+                    saveCacheEntry(normKey, card);
+                    return card;
                 }
             }
 
-            // Wenn die Übereinstimmung mindestens 62% ist (z. B. "kashtirafenrir8" vs "kashtirafenrir" = 93%)
-            if (highestSimilarity >= 0.62) {
-                return bestMatch;
+            // 3. Keyword Fuzzy-Suche via YGOPRODeck API
+            // Extrahiere signifikante Wörter (längere Wörter wie "SUDELKREISCH" oder "KASHTIRA" zuerst)
+            const words = (trimmedNoise || clean).split(/[\s\-]+/).filter(w => w.length >= 4);
+            words.sort((a, b) => b.length - a.length);
+
+            for (let i = 0; i < Math.min(2, words.length); i++) {
+                card = await fetchFuzzy(words[i], normKey);
+                if (card) {
+                    saveCacheEntry(normKey, card);
+                    return card;
+                }
             }
 
             return null;
         }
 
-        // Schneller Ähnlichkeits-Score (Dice-Koeffizient auf Bigrammen)
-        function similarity(s1, s2) {
-            if (s1 === s2) return 1;
-            if (s1.length < 2 || s2.length < 2) return 0;
+        async function fetchExact(name) {
+            // Check Englisch
+            try {
+                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`);
+                if (res.ok) {
+                    let data = await res.json();
+                    if (data.data && data.data.length > 0) return formatCard(data.data[0]);
+                }
+            } catch(e){}
 
-            const bigrams = new Map();
-            for (let i = 0; i < s1.length - 1; i++) {
-                const b = s1.substr(i, 2);
-                bigrams.set(b, (bigrams.get(b) || 0) + 1);
-            }
+            // Check Deutsch
+            try {
+                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}&language=de`);
+                if (res.ok) {
+                    let data = await res.json();
+                    if (data.data && data.data.length > 0) return formatCard(data.data[0]);
+                }
+            } catch(e){}
 
-            let intersection = 0;
-            for (let i = 0; i < s2.length - 1; i++) {
-                const b = s2.substr(i, 2);
-                const count = bigrams.get(b) || 0;
-                if (count > 0) {
-                    bigrams.set(b, count - 1);
-                    intersection++;
+            return null;
+        }
+
+        async function fetchFuzzy(keyword, targetNorm) {
+            let candidates = [];
+
+            // 1. Suche englische Kandidaten
+            try {
+                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(keyword)}&num=15&offset=0`);
+                if (res.ok) {
+                    let data = await res.json();
+                    if (data.data) candidates.push(...data.data);
+                }
+            } catch(e){}
+
+            // 2. Suche deutsche Kandidaten
+            try {
+                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(keyword)}&language=de&num=15&offset=0`);
+                if (res.ok) {
+                    let data = await res.json();
+                    if (data.data) candidates.push(...data.data);
+                }
+            } catch(e){}
+
+            if (candidates.length === 0) return null;
+
+            let bestMatch = null;
+            let highestSim = 0;
+
+            for (const c of candidates) {
+                const cNorm = normalize(c.name);
+                if (cNorm === targetNorm) return formatCard(c);
+
+                const sim = computeSimilarity(targetNorm, cNorm);
+                if (sim > highestSim) {
+                    highestSim = sim;
+                    bestMatch = c;
                 }
             }
 
-            return (2.0 * intersection) / (s1.length + s2.length - 2);
+            // Mindestens 72 % Ähnlichkeit gefordert – schließt Artefakte rigoros aus
+            if (highestSim >= 0.72) {
+                return formatCard(bestMatch);
+            }
+
+            return null;
         }
 
-        function cleanRaw(raw) {
-            return raw
-                .replace(/^[0-9\s\-,']+/g, '') 
-                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,']/g, '') 
-                .replace(/\s+(a|x|bf|ii|57|e|i|h|o|u|m)$/i, '') 
-                .replace(/^[\s\-,']+|[\s\-,']+$/g, '')
-                .replace(/\s{2,}/g, ' ')
-                .trim();
+        function formatCard(card) {
+            const t = (card.type || '').toLowerCase();
+            const isExtra = t.includes('fusion') || t.includes('synchro') || t.includes('xyz') || t.includes('link');
+            return {
+                realName: card.name,
+                id: card.id,
+                isExtra: isExtra
+            };
+        }
+
+        function normalize(str) {
+            return str.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+        }
+
+        // Dice-Sørensen Bigramm-Ähnlichkeitskoeffizient
+        function computeSimilarity(s1, s2) {
+            if (s1 === s2) return 1;
+            if (s1.length < 2 || s2.length < 2) return 0;
+
+            const bg = new Map();
+            for (let i = 0; i < s1.length - 1; i++) {
+                const b = s1.substr(i, 2);
+                bg.set(b, (bg.get(b) || 0) + 1);
+            }
+
+            let matches = 0;
+            for (let i = 0; i < s2.length - 1; i++) {
+                const b = s2.substr(i, 2);
+                const count = bg.get(b) || 0;
+                if (count > 0) {
+                    bg.set(b, count - 1);
+                    matches++;
+                }
+            }
+
+            return (2.0 * matches) / (s1.length + s2.length - 2);
         }
 
         function updateUI() {
             document.getElementById('card-counter').innerText = cardList.length;
             const uiList = document.getElementById('card-list-ui');
             const counts = {};
-            cardList.forEach(c => counts[c] = (counts[c] || 0) + 1);
+            cardList.forEach(c => counts[c.realName] = (counts[c.realName] || 0) + 1);
             
             uiList.innerHTML = '';
             for (const [name, qty] of Object.entries(counts)) {
@@ -491,7 +599,7 @@
         }
 
         function removeSingleCard(cardName) {
-            const idx = cardList.lastIndexOf(cardName);
+            const idx = cardList.map(c => c.realName).lastIndexOf(cardName);
             if (idx !== -1) {
                 cardList.splice(idx, 1);
                 updateUI();
@@ -515,7 +623,7 @@
 
         function getAggregatedList() {
             const counts = {};
-            cardList.forEach(c => counts[c] = (counts[c] || 0) + 1);
+            cardList.forEach(c => counts[c.realName] = (counts[c.realName] || 0) + 1);
             return Object.entries(counts).map(([name, qty]) => `${qty}x ${name}`).join('\n');
         }
 
@@ -537,64 +645,37 @@
         function exportNeuron() {
             if(cardList.length === 0) return alert("Liste ist leer!");
             let out = "#created by YGO Instant Scanner\n#main\n";
-            cardList.forEach(c => out += c + "\n");
-            out += "#extra\n!side\n";
+            cardList.forEach(c => {
+                if(!c.isExtra) out += c.realName + "\n";
+            });
+            out += "#extra\n";
+            cardList.forEach(c => {
+                if(c.isExtra) out += c.realName + "\n";
+            });
+            out += "!side\n";
+
             const blob = new Blob([out], { type: 'text/plain' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'Neuron_Deck.txt';
+            a.download = 'Neuron_Deckliste.txt';
             a.click();
         }
 
-        // Instant .YDK Export ohne Ladezeiten (da IDs bereits in lokaler DB liegen!)
         async function exportYDK() {
             if(cardList.length === 0) return alert("Liste ist leer!");
-            showLoading("Erstelle .YDK...");
-            
-            const counts = {};
-            cardList.forEach(c => counts[c] = (counts[c] || 0) + 1);
-            
+            showLoading("Erstelle .YDK Datei...");
+
             let mainDeckIds = [];
             let extraDeckIds = [];
-            let notFound = [];
 
-            for (const [name, qty] of Object.entries(counts)) {
-                // Suche zuerst in geladener DB
-                const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const found = dbCards.find(c => c.cleanName === clean || c.realName.toLowerCase() === name.toLowerCase());
-
-                if (found) {
-                    for(let i=0; i<qty; i++) {
-                        if(found.isExtra) extraDeckIds.push(found.id);
-                        else mainDeckIds.push(found.id);
-                    }
-                } else {
-                    // Fallback Online Check
-                    try {
-                        let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`);
-                        if (!res.ok) res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de&name=${encodeURIComponent(name)}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            const card = data.data[0];
-                            const t = card.type.toLowerCase();
-                            const isEx = t.includes('fusion') || t.includes('synchro') || t.includes('xyz') || t.includes('link');
-                            for(let i=0; i<qty; i++) {
-                                if(isEx) extraDeckIds.push(card.id);
-                                else mainDeckIds.push(card.id);
-                            }
-                        } else {
-                            notFound.push(name);
-                        }
-                    } catch(e) {
-                        notFound.push(name);
-                    }
+            for (const card of cardList) {
+                if (card.id && card.id > 0) {
+                    if (card.isExtra) extraDeckIds.push(card.id);
+                    else mainDeckIds.push(card.id);
                 }
             }
 
             hideLoading();
-            if (notFound.length > 0) {
-                alert("Konnte Passcode nicht finden für:\n" + notFound.join(", "));
-            }
 
             let ydk = "#created by YGO Instant Scanner\n#main\n";
             mainDeckIds.forEach(id => ydk += id + "\n");

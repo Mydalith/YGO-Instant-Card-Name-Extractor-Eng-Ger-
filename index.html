@@ -17,7 +17,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
-        header { background: var(--bg-panel); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid #2d3748; }
+        header { background: var(--bg-panel); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid #2d3748; flex-shrink: 0; }
         .logo-area { display: flex; align-items: center; gap: 8px; }
         .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #FFB703, #FF8C00); border-radius: 8px; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #000; font-size: 16px; }
         .title-group h1 { font-size: 15px; font-weight: 700; color: var(--primary); }
@@ -30,25 +30,25 @@
         .scanner-container { position: relative; flex: 1.1; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
         #camera-feed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         
-        /* Streng verengter Kasten: Spart Symbol rechts & Ränder unten/oben komplett aus */
         .tunnel-mask {
             position: absolute;
             top: 50%;
-            left: 46%; /* Leicht nach links versetzt, um den Text zentriert zu halten und das Symbol rechts auszusperren */
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 58%; 
-            height: 32px; /* Flacher: Verhindert Erfassen von Kartentyp darunter */
-            max-width: 230px;
+            width: 54%; 
+            height: 34px; 
+            max-width: 220px;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98);
             border: 2px solid var(--neon-cyan);
             border-radius: 4px;
             z-index: 2;
+            pointer-events: none;
         }
 
         .tunnel-label { 
             position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
             white-space: nowrap; text-align: center; color: #fff; font-size: 10px; 
-            font-weight: bold; background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; 
+            font-weight: bold; background: rgba(0,0,0,0.85); padding: 2px 8px; border-radius: 4px; 
         }
         
         .laser-line { width: 100%; height: 2px; background: var(--primary); position: absolute; top: 50%; box-shadow: 0 0 8px var(--primary); animation: scan 2s ease-in-out infinite; opacity: 0.8; }
@@ -57,10 +57,10 @@
         .tool-btn { background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
         #torch-btn { width: 34px; height: 34px; border-radius: 50%; font-size: 14px; display: none; }
         .preview-canvas-container { border: 1px solid #444; border-radius: 4px; overflow: hidden; background: #000; }
-        #debug-canvas { max-width: 80px; height: auto; display: block; }
+        #debug-canvas { max-width: 90px; height: auto; display: block; }
 
         /* CONTROLS */
-        .controls-panel { padding: 10px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 8px; }
+        .controls-panel { padding: 10px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
         .main-action-row { display: flex; gap: 10px; }
         
         #scan-btn {
@@ -70,6 +70,7 @@
             padding: 14px; font-size: 16px; font-weight: 800;
             display: flex; justify-content: center; align-items: center; gap: 8px;
             box-shadow: 0 4px 12px rgba(255, 183, 3, 0.3);
+            cursor: pointer;
         }
         #scan-btn:active { transform: scale(0.97); }
         
@@ -90,7 +91,7 @@
         .delete-item-btn { color: #718096; background: none; border: none; font-size: 14px; padding: 0 4px; cursor: pointer; }
 
         /* EXPORT ROW */
-        .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px 14px; background: var(--bg-panel); border-top: 1px solid #2d3748; }
+        .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px 14px; background: var(--bg-panel); border-top: 1px solid #2d3748; flex-shrink: 0; }
         .export-btn { background: #2d3748; color: #fff; border: none; padding: 9px; border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 4px; cursor: pointer; }
         .export-btn.gemini { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
         .export-btn.ydk { background: #059669; }
@@ -121,7 +122,7 @@
     <div class="scanner-container">
         <video id="camera-feed" autoplay playsinline muted></video>
         <div class="tunnel-mask" id="tunnel-hole">
-            <div class="tunnel-label">NUR Kartentitel hier einpassen</div>
+            <div class="tunnel-label">KARTENNAME HIER</div>
             <div class="laser-line"></div>
         </div>
         
@@ -232,56 +233,43 @@
         initOCR();
 
         async function captureAndScan() {
-            if (!worker) return;
+            if (!worker || video.videoWidth === 0) return;
             playBeep();
             
-            const vRatio = video.videoWidth / video.videoHeight;
-            const wRatio = window.innerWidth / video.clientHeight;
-            
-            let dW = video.videoWidth, dH = video.videoHeight, sX = 0, sY = 0;
-            if (wRatio < vRatio) {
-                dW = video.videoHeight * wRatio;
-                sX = (video.videoWidth - dW) / 2;
-            } else {
-                dH = video.videoWidth / wRatio;
-                sY = (video.videoHeight - dH) / 2;
-            }
+            const vW = video.videoWidth;
+            const vH = video.videoHeight;
+            const elemRect = video.getBoundingClientRect();
+            const elemW = elemRect.width;
+            const elemH = elemRect.height;
+
+            const scale = Math.max(elemW / vW, elemH / vH);
+            const renderedW = vW * scale;
+            const renderedH = vH * scale;
+
+            const offsetX = (renderedW - elemW) / 2;
+            const offsetY = (renderedH - elemH) / 2;
 
             const holeRect = tunnelHole.getBoundingClientRect();
-            const scX = dW / window.innerWidth;
-            const scY = dH / video.clientHeight;
+            const holeRelX = holeRect.left - elemRect.left;
+            const holeRelY = holeRect.top - elemRect.top;
 
-            const cropX = sX + (holeRect.left * scX);
-            const cropY = sY + (holeRect.top * scY);
-            const cropW = holeRect.width * scX;
-            const cropH = holeRect.height * scY;
+            const cropX = (holeRelX + offsetX) / scale;
+            const cropY = (holeRelY + offsetY) / scale;
+            const cropW = holeRect.width / scale;
+            const cropH = holeRect.height / scale;
 
-            // 3.5x Supersampling
-            const scale = 3.5;
-            debugCanvas.width = Math.round(cropW * scale);
-            debugCanvas.height = Math.round(cropH * scale);
-            const ctx = debugCanvas.getContext('2d', { willReadFrequently: true });
+            // 2.5x Upscaling ohne schädliche Kontrastfilter – echtes, klares Kamerabild
+            const supersample = 2.5;
+            debugCanvas.width = Math.round(cropW * supersample);
+            debugCanvas.height = Math.round(cropH * supersample);
+            const ctx = debugCanvas.getContext('2d');
             
+            // Bild glatt und unverfälscht zeichnen
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
-            
-            // Adaptiver Schärfe- und Kontrastfilter (erkennt auch weiße Schrift auf Fallen/Zauberkarten)
-            const imgData = ctx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
-            const d = imgData.data;
-            
-            let totalLum = 0;
-            for (let i = 0; i < d.length; i += 4) {
-                totalLum += (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
-            }
-            const avgLum = totalLum / (d.length / 4);
 
-            for (let i = 0; i < d.length; i += 4) {
-                let lum = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
-                // Dynamischer Kontrast
-                lum = lum < avgLum ? lum * 0.6 : Math.min(255, lum * 1.35);
-                d[i] = d[i+1] = d[i+2] = lum;
-            }
-            ctx.putImageData(imgData, 0, 0);
-
+            // OCR direkt auf dem klaren Originalbild ausführen
             const result = await worker.recognize(debugCanvas);
             let clean = cleanExtractedName(result.data.text);
 
@@ -291,11 +279,11 @@
             }
         }
 
-        // Strenger Filter gegen Icon-Glitches am Ende des Namens
         function cleanExtractedName(raw) {
             return raw
-                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,']/g, '') // Ungültige Zeichen weg
-                .replace(/\s+(a|x|bf|ii|57|e|i|h|o|u|m)$/i, '') // Schneidet typische Eigenschafts-Icon-Artefakte am Ende ab
+                .replace(/^[0-9\s\-,']+/g, '') // Entfernt Artefakte am Wortanfang wie die "7" vor "Tränenklagen"
+                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,']/g, '') 
+                .replace(/\s+(a|x|bf|ii|57|e|i|h|o|u|m)$/i, '') 
                 .replace(/^[\s\-,']+|[\s\-,']+$/g, '')
                 .replace(/\s{2,}/g, ' ')
                 .trim();

@@ -77,56 +77,63 @@
             object-fit: cover; 
         }
         
-        /* The Pitch Black Mask */
+        /* The Pitch Black Mask - Schmaler & präzise für den Titel */
         .tunnel-mask {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 60%; 
-            height: 64px; 
-            max-width: 300px;
+            width: 46%; 
+            height: 38px; 
+            max-width: 210px;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98);
             border: 2px solid var(--neon-cyan);
             border-radius: 4px;
             z-index: 2;
+            transition: width 0.1s ease, max-width 0.1s ease;
         }
 
         .tunnel-label { 
-            position: absolute; top: -30px; left: 0; width: 100%; 
-            text-align: center; color: #fff; font-size: 12px; 
-            font-weight: bold; background: rgba(0,0,0,0.6); 
-            padding: 4px; border-radius: 4px; 
+            position: absolute; top: -28px; left: 50%; 
+            transform: translateX(-50%);
+            white-space: nowrap;
+            text-align: center; color: #fff; font-size: 11px; 
+            font-weight: bold; background: rgba(0,0,0,0.7); 
+            padding: 3px 8px; border-radius: 4px; 
         }
         
         .laser-line { 
             width: 100%; height: 2px; background: var(--primary); 
             position: absolute; top: 50%; 
-            box-shadow: 0 0 10px var(--primary); 
-            animation: scan 2.5s ease-in-out infinite; opacity: 0.7; 
+            box-shadow: 0 0 8px var(--primary); 
+            animation: scan 2s ease-in-out infinite; opacity: 0.8; 
         }
 
-        /* TOOLS OVERLAY (Flashlight & Preview) */
+        /* TOOLS OVERLAY */
         .tools-overlay {
-            position: absolute; bottom: 16px; right: 16px;
-            display: flex; flex-direction: column; gap: 10px; z-index: 10;
+            position: absolute; bottom: 12px; right: 12px;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 10;
         }
-        #torch-btn {
-            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.3);
-            color: white; border-radius: 50%; width: 44px; height: 44px;
-            display: none; justify-content: center; align-items: center; font-size: 20px;
-            backdrop-filter: blur(4px);
+        .tool-btn {
+            background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25);
+            color: white; border-radius: 8px; padding: 6px 10px;
+            display: flex; justify-content: center; align-items: center; font-size: 12px;
+            font-weight: 600; backdrop-filter: blur(4px); cursor: pointer;
         }
+        .tool-btn:active { background: rgba(255, 183, 3, 0.4); }
+        #torch-btn { width: 38px; height: 38px; border-radius: 50%; font-size: 16px; display: none; }
+        
+        .width-controls { display: flex; gap: 4px; }
         .preview-canvas-container { 
             border: 1px solid #444; border-radius: 4px; 
             overflow: hidden; background: #000; 
         }
-        #debug-canvas { max-width: 100px; height: auto; display: block; }
+        #debug-canvas { max-width: 90px; height: auto; display: block; }
 
         /* CONTROLS */
         .controls-panel { 
-            padding: 16px; background: var(--bg-dark); 
-            z-index: 10; display: flex; flex-direction: column; gap: 12px; 
+            padding: 14px 16px; background: var(--bg-dark); 
+            z-index: 10; display: flex; flex-direction: column; gap: 10px; 
         }
         .main-action-row { display: flex; gap: 12px; }
         
@@ -156,11 +163,11 @@
             border-bottom: none; display: flex; flex-direction: column; overflow: hidden; 
         }
         .list-header { 
-            padding: 12px 16px; background: rgba(0,0,0,0.2); 
+            padding: 10px 16px; background: rgba(0,0,0,0.2); 
             border-bottom: 1px solid #2d3748; display: flex; 
             justify-content: space-between; align-items: center; font-size: 13px; 
         }
-        .clear-btn { color: #f87171; background: none; border: none; font-size: 12px; padding: 4px; }
+        .clear-btn { color: #f87171; background: none; border: none; font-size: 12px; padding: 4px; cursor: pointer; }
         
         #card-list-ui { 
             flex: 1; overflow-y: auto; padding: 10px; 
@@ -168,30 +175,31 @@
         }
         .card-item { 
             display: flex; align-items: center; gap: 10px; 
-            background: rgba(255,255,255,0.05); padding: 10px 12px; 
+            background: rgba(255,255,255,0.05); padding: 8px 12px; 
             border-radius: 8px; font-size: 14px; 
         }
         .card-qty { 
             background: rgba(255,183,3,0.2); color: var(--primary); 
-            padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; 
+            padding: 3px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; 
         }
 
         /* EXPORT ROW */
         .export-row { 
             display: grid; grid-template-columns: 1fr 1fr; gap: 8px; 
-            padding: 12px 16px; background: var(--bg-panel); border-top: 1px solid #2d3748; 
+            padding: 10px 16px 14px 16px; background: var(--bg-panel); border-top: 1px solid #2d3748; 
         }
         .export-btn { 
             background: #2d3748; color: #fff; border: none; 
-            padding: 12px; border-radius: 8px; font-size: 13px; 
+            padding: 11px; border-radius: 8px; font-size: 13px; 
             font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 6px; 
+            cursor: pointer;
         }
         .export-btn.gemini { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
         
         /* Modal for Loading */
         #loading-overlay { 
             display: none; position: fixed; top: 0; left: 0; 
-            width: 100%; height: 100%; background: rgba(0,0,0,0.8); 
+            width: 100%; height: 100%; background: rgba(0,0,0,0.85); 
             z-index: 999; justify-content: center; align-items: center; 
             flex-direction: column; color: white; 
         }
@@ -228,12 +236,16 @@
     <div class="scanner-container">
         <video id="camera-feed" autoplay playsinline muted></video>
         <div class="tunnel-mask" id="tunnel-hole">
-            <div class="tunnel-label">Kartenname hier (Abstand halten)</div>
+            <div class="tunnel-label">Nur Name (Attribut aussparen)</div>
             <div class="laser-line"></div>
         </div>
         
         <div class="tools-overlay">
-            <button id="torch-btn" onclick="toggleTorch()">🔦</button>
+            <button class="tool-btn" id="torch-btn" onclick="toggleTorch()">🔦</button>
+            <div class="width-controls">
+                <button class="tool-btn" onclick="adjustBoxWidth(-15)">◀▶ -</button>
+                <button class="tool-btn" onclick="adjustBoxWidth(15)">◀▶ +</button>
+            </div>
             <div class="preview-canvas-container">
                 <canvas id="debug-canvas"></canvas>
             </div>
@@ -282,8 +294,14 @@
         let cardList = [];
         let videoTrack = null;
         let torchEnabled = false;
+        let currentWidthPx = 210;
 
-        // Audio Context for feedback
+        function adjustBoxWidth(delta) {
+            currentWidthPx = Math.max(130, Math.min(320, currentWidthPx + delta));
+            tunnelHole.style.width = currentWidthPx + 'px';
+            tunnelHole.style.maxWidth = currentWidthPx + 'px';
+        }
+
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep() {
             if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -301,7 +319,6 @@
             if (navigator.vibrate) navigator.vibrate(50);
         }
 
-        // Initialize Camera & Flashlight Support
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -310,7 +327,6 @@
                 video.srcObject = stream;
                 videoTrack = stream.getVideoTracks()[0];
                 
-                // Check if Flashlight is supported
                 const capabilities = videoTrack.getCapabilities();
                 if (capabilities.torch) {
                     torchBtn.style.display = 'flex';
@@ -326,10 +342,9 @@
             videoTrack.applyConstraints({
                 advanced: [{ torch: torchEnabled }]
             });
-            torchBtn.style.background = torchEnabled ? 'rgba(255, 183, 3, 0.4)' : 'rgba(255, 255, 255, 0.1)';
+            torchBtn.style.background = torchEnabled ? 'rgba(255, 183, 3, 0.4)' : 'rgba(20, 24, 35, 0.85)';
         }
 
-        // Initialize Tesseract with explicit Umlaut support
         async function initOCR() {
             try {
                 worker = await Tesseract.createWorker(['deu', 'eng']);
@@ -347,12 +362,10 @@
         startCamera();
         initOCR();
 
-        // CAPTURE & PROCESS LOGIC (With 2-Pass Fallback)
         async function captureAndScan() {
             if (!worker) return;
             playBeep();
             
-            // Calculate exact crop box
             const videoRatio = video.videoWidth / video.videoHeight;
             const windowRatio = window.innerWidth / video.clientHeight;
             
@@ -384,10 +397,10 @@
             
             ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
             
-            // PASS 1: Soft contrast for standard / non-foil cards
+            // PASS 1: Sanfter Kontrast
             const imgData = ctx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
             const data = imgData.data;
-            let dataCopy = new Uint8ClampedArray(data); // Save original for Pass 2
+            let dataCopy = new Uint8ClampedArray(data);
             
             for (let i = 0; i < data.length; i += 4) {
                 let brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
@@ -398,26 +411,33 @@
             ctx.putImageData(imgData, 0, 0);
 
             let result = await worker.recognize(debugCanvas);
-            let cleanText = result.data.text.replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,!'&]/g, '').trim();
+            let cleanText = cleanExtractedName(result.data.text);
             
-            // PASS 2: If nothing found, apply Hard Binarization (Otsu-Style) for Shiny/Foil Cards
+            // PASS 2: Binarisierung bei Glanz / Secret Rare
             if (cleanText.length < 3) {
                 for (let i = 0; i < dataCopy.length; i += 4) {
                     let b = (dataCopy[i] * 0.299 + dataCopy[i+1] * 0.587 + dataCopy[i+2] * 0.114);
-                    let val = b < 100 ? 0 : 255; // Extreme black & white
-                    dataCopy[i] = dataCopy[i+1] = dataCopy[i+2] = val;
+                    dataCopy[i] = dataCopy[i+1] = dataCopy[i+2] = (b < 100 ? 0 : 255);
                 }
                 const hardImgData = new ImageData(dataCopy, debugCanvas.width, debugCanvas.height);
                 ctx.putImageData(hardImgData, 0, 0);
                 
                 result = await worker.recognize(debugCanvas);
-                cleanText = result.data.text.replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,!'&]/g, '').trim();
+                cleanText = cleanExtractedName(result.data.text);
             }
 
             if (cleanText.length > 2) {
                 cardList.push(cleanText);
                 updateUI();
             }
+        }
+
+        function cleanExtractedName(raw) {
+            return raw
+                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,!'&]/g, '')
+                .replace(/^[\s\-,!'&]+|[\s\-,!'&]+$/g, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
         }
 
         function updateUI() {
@@ -494,10 +514,8 @@
 
             for (const [name, qty] of Object.entries(counts)) {
                 try {
-                    // 1. Check English Database Name First
                     let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`);
                     
-                    // 2. Fallback: If not found, check the German Database
                     if (!res.ok) {
                         res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de&name=${encodeURIComponent(name)}`);
                     }
@@ -525,7 +543,7 @@
             hideLoading();
             
             if (notFound.length > 0) {
-                alert("Folgende Karten wurden in der DB nicht gefunden (Tippfehler?):\n" + notFound.join(", "));
+                alert("Folgende Karten wurden in der DB nicht gefunden:\n" + notFound.join(", "));
             }
 
             let ydkString = "#created by YGO Instant Scanner\n#main\n";

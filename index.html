@@ -26,18 +26,35 @@
         .status-pill { display: flex; align-items: center; gap: 6px; background: #064e3b; color: #34d399; padding: 4px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid #047857; }
         .dot { width: 8px; height: 8px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; }
 
-        /* SCANNER AREA (TUNNEL VISION) */
-        .scanner-container { position: relative; flex: 1.1; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #000; }
-        #camera-feed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        /* SCANNER VIEWPORT */
+        .scanner-container { 
+            position: relative; 
+            flex: 1.1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; 
+            background: #000; 
+        }
+
+        #camera-feed { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+        }
         
+        /* Das Fokus-Zielfenster mit echtem Pitch-Black Tunnel */
         .tunnel-mask {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 54%; 
-            height: 34px; 
-            max-width: 220px;
+            width: 58%; 
+            height: 36px; 
+            max-width: 230px;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98);
             border: 2px solid var(--neon-cyan);
             border-radius: 4px;
@@ -46,18 +63,59 @@
         }
 
         .tunnel-label { 
-            position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
-            white-space: nowrap; text-align: center; color: #fff; font-size: 10px; 
-            font-weight: bold; background: rgba(0,0,0,0.85); padding: 2px 8px; border-radius: 4px; 
+            position: absolute; 
+            top: -26px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            white-space: nowrap; 
+            text-align: center; 
+            color: #fff; 
+            font-size: 10px; 
+            font-weight: bold; 
+            background: rgba(0,0,0,0.85); 
+            padding: 2px 8px; 
+            border-radius: 4px; 
         }
         
-        .laser-line { width: 100%; height: 2px; background: var(--primary); position: absolute; top: 50%; box-shadow: 0 0 8px var(--primary); animation: scan 2s ease-in-out infinite; opacity: 0.8; }
+        .laser-line { 
+            width: 100%; 
+            height: 2px; 
+            background: var(--primary); 
+            position: absolute; 
+            top: 50%; 
+            box-shadow: 0 0 8px var(--primary); 
+            animation: scan 2s ease-in-out infinite; 
+            opacity: 0.8; 
+        }
 
-        .tools-overlay { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 10; }
-        .tool-btn { background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .tools-overlay { 
+            position: absolute; 
+            bottom: 8px; 
+            right: 8px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: flex-end; 
+            gap: 6px; 
+            z-index: 10; 
+        }
+        .tool-btn { 
+            background: rgba(20, 24, 35, 0.85); 
+            border: 1px solid rgba(255,255,255,0.25); 
+            color: white; 
+            border-radius: 6px; 
+            padding: 4px 8px; 
+            font-size: 11px; 
+            font-weight: 600; 
+            cursor: pointer; 
+        }
         #torch-btn { width: 34px; height: 34px; border-radius: 50%; font-size: 14px; display: none; }
-        .preview-canvas-container { border: 1px solid #444; border-radius: 4px; overflow: hidden; background: #000; }
-        #debug-canvas { max-width: 90px; height: auto; display: block; }
+        .preview-canvas-container { 
+            border: 1px solid #00f3ff; 
+            border-radius: 4px; 
+            overflow: hidden; 
+            background: #000; 
+        }
+        #debug-canvas { max-width: 110px; height: auto; display: block; }
 
         /* CONTROLS */
         .controls-panel { padding: 10px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
@@ -119,7 +177,7 @@
         </div>
     </header>
 
-    <div class="scanner-container">
+    <div class="scanner-container" id="scanner-box">
         <video id="camera-feed" autoplay playsinline muted></video>
         <div class="tunnel-mask" id="tunnel-hole">
             <div class="tunnel-label">KARTENNAME HIER</div>
@@ -128,7 +186,7 @@
         
         <div class="tools-overlay">
             <button class="tool-btn" id="torch-btn" onclick="toggleTorch()">🔦</button>
-            <div class="preview-canvas-container">
+            <div class="preview-canvas-container" title="Exakte OCR-Aufnahme">
                 <canvas id="debug-canvas"></canvas>
             </div>
         </div>
@@ -171,11 +229,16 @@
         let tunnelHole = document.getElementById('tunnel-hole');
         let debugCanvas = document.getElementById('debug-canvas');
         let torchBtn = document.getElementById('torch-btn');
+        let scannerBox = document.getElementById('scanner-box');
         
         let worker = null;
         let cardList = [];
         let videoTrack = null;
         let torchEnabled = false;
+
+        // Hidden canvas to accurately mirror the full displayed video feed
+        const renderCanvas = document.createElement('canvas');
+        const renderCtx = renderCanvas.getContext('2d', { willReadFrequently: true });
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep() {
@@ -197,7 +260,12 @@
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', focusMode: 'continuous', width: { ideal: 1920 }, height: { ideal: 1080 } }
+                    video: { 
+                        facingMode: 'environment', 
+                        focusMode: 'continuous',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
                 });
                 video.srcObject = stream;
                 videoTrack = stream.getVideoTracks()[0];
@@ -232,44 +300,45 @@
         startCamera();
         initOCR();
 
+        // 100% EXAKTE FOKUS-PROJEKTION DURCH RENDER-CANVAS
         async function captureAndScan() {
             if (!worker || video.videoWidth === 0) return;
             playBeep();
-            
+
+            const cW = scannerBox.clientWidth;
+            const cH = scannerBox.clientHeight;
             const vW = video.videoWidth;
             const vH = video.videoHeight;
-            const elemRect = video.getBoundingClientRect();
-            const elemW = elemRect.width;
-            const elemH = elemRect.height;
 
-            const scale = Math.max(elemW / vW, elemH / vH);
-            const renderedW = vW * scale;
-            const renderedH = vH * scale;
+            // Zeichne das Bild mit exaktem CSS "object-fit: cover" auf eine interne Rendering-Ebene
+            const scale = Math.max(cW / vW, cH / vH);
+            const rW = vW * scale;
+            const rH = vH * scale;
+            const rX = (cW - rW) / 2;
+            const rY = (cH - rH) / 2;
 
-            const offsetX = (renderedW - elemW) / 2;
-            const offsetY = (renderedH - elemH) / 2;
+            renderCanvas.width = cW;
+            renderCanvas.height = cH;
+            renderCtx.drawImage(video, rX, rY, rW, rH);
 
-            const holeRect = tunnelHole.getBoundingClientRect();
-            const holeRelX = holeRect.left - elemRect.left;
-            const holeRelY = holeRect.top - elemRect.top;
+            // Ermittle die exakte Position des Fokus-Kastens relativ zum Scanner-Fenster
+            const boxRect = tunnelHole.getBoundingClientRect();
+            const contRect = scannerBox.getBoundingClientRect();
 
-            const cropX = (holeRelX + offsetX) / scale;
-            const cropY = (holeRelY + offsetY) / scale;
-            const cropW = holeRect.width / scale;
-            const cropH = holeRect.height / scale;
+            const cropX = boxRect.left - contRect.left;
+            const cropY = boxRect.top - contRect.top;
+            const cropW = boxRect.width;
+            const cropH = boxRect.height;
 
-            // 2.5x Upscaling ohne schädliche Kontrastfilter – echtes, klares Kamerabild
-            const supersample = 2.5;
-            debugCanvas.width = Math.round(cropW * supersample);
-            debugCanvas.height = Math.round(cropH * supersample);
-            const ctx = debugCanvas.getContext('2d');
-            
-            // Bild glatt und unverfälscht zeichnen
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
+            // Übertrage den 1:1 identischen Ausschnitt auf das Debug-/OCR-Canvas (mit 2x Glättung)
+            debugCanvas.width = cropW * 2;
+            debugCanvas.height = cropH * 2;
+            const dCtx = debugCanvas.getContext('2d');
+            dCtx.imageSmoothingEnabled = true;
+            dCtx.imageSmoothingQuality = 'high';
+            dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
 
-            // OCR direkt auf dem klaren Originalbild ausführen
+            // OCR direkt starten
             const result = await worker.recognize(debugCanvas);
             let clean = cleanExtractedName(result.data.text);
 
@@ -281,7 +350,7 @@
 
         function cleanExtractedName(raw) {
             return raw
-                .replace(/^[0-9\s\-,']+/g, '') // Entfernt Artefakte am Wortanfang wie die "7" vor "Tränenklagen"
+                .replace(/^[0-9\s\-,']+/g, '') 
                 .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,']/g, '') 
                 .replace(/\s+(a|x|bf|ii|57|e|i|h|o|u|m)$/i, '') 
                 .replace(/^[\s\-,']+|[\s\-,']+$/g, '')

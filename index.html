@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>YGO Instant Scanner</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ygoGold: '#f59e0b',
+            ygoDark: '#050508',
+            ygoCardBg: '#0b101d',
+            ygoItemBg: '#151c2e',
+            neonCyan: '#22d3ee'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Tesseract.js v5 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    /* Absolute Pitch Black Hole Mask matching the reference photo */
+    .tunnel-hole {
+      box-shadow: 0 0 0 9999px #050508;
+    }
+
+    /* Leuchtende Cyan/Neongrüne Kontur um den Namens-Slot */
+    .neon-focus-box {
+      border: 2.5px solid #22d3ee;
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.85), inset 0 0 10px rgba(34, 211, 238, 0.35);
+      border-radius: 12px;
+    }
+
+    /* Laser Scanning Guidance Line Animation */
+    @keyframes scanLaser {
+      0% { transform: translateY(-16px); opacity: 0.25; }
+      50% { opacity: 0.95; }
+      100% { transform: translateY(16px); opacity: 0.25; }
+    }
+    .laser-line {
+      animation: scanLaser 1.8s ease-in-out infinite alternate;
+    }
+
+    /* Scrollbar hide */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-[#070b14] text-slate-100 min-h-screen flex flex-col justify-between select-none overflow-x-hidden">
+
+  <header class="w-full bg-[#0b101d] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between z-40 sticky top-0 shadow-lg">
+    <div class="flex items-center space-x-3">
+      <!-- Gold Yu-Gi-Oh Card Logo -->
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 flex items-center justify-center font-black text-slate-950 text-base shadow-md shadow-amber-500/20 ring-1 ring-amber-300/40">
+        🎴
+      </div>
+      <div>
+        <h1 class="text-xs sm:text-sm font-black tracking-wide text-amber-400 uppercase leading-none">YGO INSTANT SCANNER</h1>
+        <p class="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-0.5">Zero-Popup Deckliste für Gemini</p>
+      </div>
+    </div>
+
+    <!-- Status Badge & Camera Switch -->
+    <div class="flex items-center space-x-2">
+      <div id="ocrStatusBadge" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-700/80 flex items-center gap-1.5 font-medium shadow-inner">
+        <span id="ocrStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="ocrStatusText">Lade OCR...</span>
+      </div>
+      <button id="switchCameraBtn" title="Kamera wechseln" class="p-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-300 rounded-lg border border-slate-800 text-xs flex items-center justify-center w-8 h-8 transition">
+        🔄
+      </button>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-md w-full mx-auto px-3.5 py-2 gap-2.5">
+    
+    <!-- Viewfinder Container -->
+    <div class="relative w-full aspect-[4/3.1] rounded-2xl overflow-hidden bg-[#050508] shadow-2xl border border-slate-800/90 flex items-center justify-center">
+      
+      <!-- Video Element -->
+      <video id="webcam" playsinline autoplay muted class="absolute inset-0 w-full h-full object-cover"></video>
+
+      <!-- Scan Snapshot Flash Animation -->
+      <div id="flashEffect" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-100 z-30"></div>
+
+      <!-- Offscreen processing canvases -->
+      <canvas id="cropCanvas" class="hidden"></canvas>
+      <canvas id="filterCanvas" class="hidden"></canvas>
+
+      <!-- PITCH BLACK OVERLAY WITH NEON FOCUS CUTOUT -->
+      <div class="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+        
+        <!-- Subtitles in Live Feed -->
+        <div class="absolute top-2.5 text-center pointer-events-none z-30">
+          <p class="text-xs font-bold text-slate-200 tracking-wide drop-shadow-md">Scanner Live Feed</p>
+          <p class="text-[9px] text-slate-400 font-medium">Tunnel Vision Mask</p>
+        </div>
+
+        <p class="text-[11px] text-slate-300 font-medium mb-1.5 drop-shadow z-30">
+          Kartentitel im Fokus-Bereich halten
+        </p>
+
+        <!-- TUNNEL CUTOUT: 100% Black outside via 9999px box-shadow, clear view inside -->
+        <div id="targetBox" class="relative w-[84%] max-w-[320px] h-[52px] tunnel-hole neon-focus-box flex items-center justify-between px-3">
+          <!-- Animated Horizontal Scanning Laser -->
+          <div class="absolute inset-x-2 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent laser-line pointer-events-none"></div>
+        </div>
+
+      </div>
+
+      <!-- Fallback Overlay if camera is denied/unavailable in environment -->
+      <div id="cameraFallbackOverlay" class="hidden absolute inset-0 bg-[#050508] p-4 flex flex-col items-center justify-center text-center z-30">
+        <p class="text-sm font-bold text-rose-400 mb-1">Kamerazugriff blockiert</p>
+        <p class="text-xs text-slate-400 mb-3 max-w-xs">Kameraerlaubnis im Browser erteilen oder Demo-Modus nutzen:</p>
+        <button id="useMockBtn" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-xs rounded-xl shadow transition">
+          Demo-Karte einfügen
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5">
+      <!-- Huge Zero-Friction Capture Button -->
+      <button id="captureBtn" class="flex-1 py-3.5 px-4 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-105 active:scale-[0.98] text-slate-950 font-black text-sm tracking-wider rounded-2xl shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2.5 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="12" cy="12" r="4"/>
+        </svg>
+        <span>ABDRUCK SCANNEN</span>
+      </button>
+
+      <!-- Counter Card Indicator with Deck Icon -->
+      <div class="bg-[#0b101d] border border-slate-800 rounded-2xl px-4 py-2 flex flex-col items-center justify-center min-w-[78px] shadow-sm">
+        <span class="text-[9px] text-slate-400 uppercase font-black tracking-wider">KARTEN</span>
+        <div class="flex items-center gap-1.5 mt-0.5">
+          <span class="text-xs">🎴</span>
+          <span id="counterDisplay" class="text-xl font-black text-amber-400 leading-none">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 bg-[#0b101d] border border-slate-800/90 rounded-2xl p-3 flex flex-col min-h-[190px]">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800/80 mb-2">
+        <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+          <span>📋</span> Live-Liste (ohne Bestätigung)
+        </span>
+        <button id="clearListBtn" class="text-[11px] text-slate-500 hover:text-rose-400 transition-colors">
+          Liste leeren
+        </button>
+      </div>
+
+      <!-- Scanned Cards List Container -->
+      <div id="cardsListContainer" class="flex-1 overflow-y-auto space-y-1.5 max-h-44 pr-1 no-scrollbar">
+        <div id="emptyListPlaceholder" class="h-full flex flex-col items-center justify-center text-slate-500 text-xs py-7 text-center">
+          <span>Noch keine Karten gescannt.</span>
+          <span class="text-[10px] text-slate-600 mt-1">Ausrichten & auf "Abdruck Scannen" tippen</span>
+        </div>
+      </div>
+
+      <!-- Multi-Format Export Toolbar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 border-t border-slate-800/80 mt-2">
+        
+        <!-- 1. Gemini AI Prompt -->
+        <button id="copyGeminiBtn" title="In Zwischenablage kopieren" class="py-2 px-2 bg-[#4f46e5] hover:bg-[#4338ca] active:scale-95 text-white font-bold text-[11px] rounded-xl shadow flex items-center justify-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+          </svg>
+          <span>Gemini Prompt</span>
+        </button>
+
+        <!-- 2. Export Raw .TXT -->
+        <button id="exportTxtBtn" title="Textliste speichern" class="py-2 px-2 bg-[#1e293b] hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold text-[11px] rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          <span>Export .TXT</span>
+        </button>
+
+        <!-- 3. Export Konami Neuron -->
+        <button id="exportNeuronBtn" title="Neuron Format exportieren" class="py-2 px-2 bg-[#0284c7] hover:bg-[#0369a1] active:scale-95 text-white font-semibold text-[11px] rounded-xl shadow flex items-center justify-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <span id="exportNeuronText">Neuron List</span>
+        </button>
+
+        <!-- 4. Export YGOPro (.ydk) -->
+        <button id="exportYdkBtn" title="YGOPro Deckdatei exportieren" class="py-2 px-2 bg-[#059669] hover:bg-[#047857] active:scale-95 text-white font-semibold text-[11px] rounded-xl shadow flex items-center justify-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          <span id="exportYdkText">Export .YDK</span>
+        </button>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-cyan-400 text-slate-950 font-black px-4 py-2 rounded-full shadow-2xl text-xs tracking-wider transform transition-all duration-300 opacity-0 pointer-events-none z-50">
+    In Zwischenablage kopiert!
+  </div>
+
+  <!-- Non-blocking Alert / Notice Modal -->
+  <div id="customAlert" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-[#0b101d] border border-slate-700 rounded-2xl p-5 max-w-xs w-full shadow-2xl">
+      <h3 class="text-amber-400 font-bold mb-2 flex items-center gap-2">
+        <span>⚠️</span> Hinweis zum Export
+      </h3>
+      <div id="customAlertText" class="text-xs text-slate-300 mb-5 leading-relaxed max-h-48 overflow-y-auto no-scrollbar"></div>
+      <button onclick="document.getElementById('customAlert').classList.add('hidden')" class="w-full bg-slate-800 hover:bg-slate-700 active:scale-95 transition rounded-xl py-2.5 font-bold text-slate-200 text-xs border border-slate-600">
+        Verstanden
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const cardMap = new Map(); // Key: Title (String), Value: Count (Number)
+    let totalCardsCount = 0;
+    let currentStream = null;
+    let facingMode = 'environment';
+    let tesseractWorker = null;
+    let isOcrReady = false;
+    let isProcessing = false;
+    let audioCtx = null;
+
+    // DOM Elements
+    const video = document.getElementById('webcam');
+    const targetBox = document.getElementById('targetBox');
+    const captureBtn = document.getElementById('captureBtn');
+    const switchCameraBtn = document.getElementById('switchCameraBtn');
+    const counterDisplay = document.getElementById('counterDisplay');
+    const cardsListContainer = document.getElementById('cardsListContainer');
+    const emptyListPlaceholder = document.getElementById('emptyListPlaceholder');
+    const copyGeminiBtn = document.getElementById('copyGeminiBtn');
+    const exportTxtBtn = document.getElementById('exportTxtBtn');
+    const exportNeuronBtn = document.getElementById('exportNeuronBtn');
+    const exportNeuronText = document.getElementById('exportNeuronText');
+    const exportYdkBtn = document.getElementById('exportYdkBtn');
+    const exportYdkText = document.getElementById('exportYdkText');
+    const clearListBtn = document.getElementById('clearListBtn');
+    const flashEffect = document.getElementById('flashEffect');
+    const ocrStatusDot = document.getElementById('ocrStatusDot');
+    const ocrStatusText = document.getElementById('ocrStatusText');
+    const cropCanvas = document.getElementById('cropCanvas');
+    const filterCanvas = document.getElementById('filterCanvas');
+    const cameraFallbackOverlay = document.getElementById('cameraFallbackOverlay');
+    const useMockBtn = document.getElementById('useMockBtn');
+    const toast = document.getElementById('toast');
+
+    // Web Audio Click Synthesizer
+    function playBeep() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+        gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.07);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.07);
+      } catch (e) {}
+    }
+
+    function triggerHaptics() {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(35); } catch(e) {}
+      }
+    }
+
+    function triggerFlash() {
+      flashEffect.style.opacity = '0.55';
+      setTimeout(() => { flashEffect.style.opacity = '0'; }, 70);
+    }
+
+    // Initialize Bilingual Tesseract.js Worker (German + English)
+    async function initOcr() {
+      try {
+        ocrStatusText.textContent = 'Lade OCR...';
+        tesseractWorker = await Tesseract.createWorker('deu+eng');
+
+        // PSM 7 treats the crop strictly as a single line of text
+        await tesseractWorker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+          tessedit_char_whitelist: " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß0123456789-'.&/!,#:",
+          preserve_interword_spaces: '1'
+        });
+
+        isOcrReady = true;
+        ocrStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        ocrStatusText.textContent = 'OCR Bereit';
+      } catch (err) {
+        console.error('OCR Init Error:', err);
+        ocrStatusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        ocrStatusText.textContent = 'OCR Offline';
+      }
+    }
+
+    // Camera Stream Initialization
+    async function startCamera() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+      }
+      cameraFallbackOverlay.classList.add('hidden');
+
+      const constraints = {
+        audio: false,
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          advanced: [{ focusMode: 'continuous' }]
+        }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        video.srcObject = stream;
+        await video.play();
+      } catch (err) {
+        console.warn('Camera standard constraint fallback:', err);
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { facingMode: facingMode }
+          });
+          currentStream = fallbackStream;
+          video.srcObject = fallbackStream;
+          await video.play();
+        } catch (fatalErr) {
+          console.error('Camera access denied:', fatalErr);
+          cameraFallbackOverlay.classList.remove('hidden');
+        }
+      }
+    }
+
+    // Accurate Sub-Region Cropping with Object-fit Cover compensation & Contrast Enhancement
+    function extractAccurateSlot(applyBinarization = false) {
+      const vidW = video.videoWidth;
+      const vidH = video.videoHeight;
+      if (!vidW || !vidH) return null;
+
+      const videoRect = video.getBoundingClientRect();
+      const targetRect = targetBox.getBoundingClientRect();
+
+      // Compute rendered video dimensions inside viewport due to object-fit: cover
+      const videoRatio = vidW / vidH;
+      const elemRatio = videoRect.width / videoRect.height;
+      let renderW, renderH, offsetX, offsetY;
+
+      if (elemRatio > videoRatio) {
+        renderW = videoRect.width;
+        renderH = videoRect.width / videoRatio;
+        offsetX = 0;
+        offsetY = (renderH - videoRect.height) / 2;
+      } else {
+        renderH = videoRect.height;
+        renderW = videoRect.height * videoRatio;
+        offsetX = (renderW - videoRect.width) / 2;
+        offsetY = 0;
+      }
+
+      // Project target box DOM coordinates onto native camera stream coordinates
+      const scale = vidW / renderW;
+      const targetLeftInVideo = (targetRect.left - videoRect.left + offsetX) * scale;
+      const targetTopInVideo = (targetRect.top - videoRect.top + offsetY) * scale;
+      const targetWInVideo = targetRect.width * scale;
+      const targetHInVideo = targetRect.height * scale;
+
+      // Crop inner region, leaving out neon borders & keeping the title intact
+      const cropX = Math.max(0, targetLeftInVideo + (targetWInVideo * 0.035));
+      const cropY = Math.max(0, targetTopInVideo + (targetHInVideo * 0.08));
+      const cropW = Math.min(vidW - cropX, targetWInVideo * 0.91);
+      const cropH = Math.min(vidH - cropY, targetHInVideo * 0.84);
+
+      cropCanvas.width = cropW;
+      cropCanvas.height = cropH;
+      const ctx = cropCanvas.getContext('2d');
+      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      filterCanvas.width = cropW;
+      filterCanvas.height = cropH;
+      const fCtx = filterCanvas.getContext('2d');
+      const imgData = ctx.getImageData(0, 0, cropW, cropH);
+      const data = imgData.data;
+
+      // Compute average luminance
+      let totalLum = 0;
+      const pixelCount = data.length / 4;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        totalLum += lum;
+      }
+      const avgLum = totalLum / pixelCount;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        if (applyBinarization) {
+          const val = lum > (avgLum * 1.05) ? 255 : 0;
+          data[i] = data[i + 1] = data[i + 2] = val;
+        } else {
+          // Dynamic high-contrast stretch
+          const normalized = Math.min(255, Math.max(0, (lum - avgLum * 0.5) * 1.6));
+          data[i] = data[i + 1] = data[i + 2] = normalized;
+        }
+      }
+
+      fCtx.putImageData(imgData, 0, 0);
+      return filterCanvas;
+    }
+
+    function cleanCardText(text) {
+      if (!text) return '';
+      return text
+        .replace(/[\r\n\t_\|\[\]\{\}\<\>~^*#@]/g, ' ')
+        .replace(/^[^\wÄÖÜäöüß]+/, '')
+        .replace(/[^\wÄÖÜäöüß]+$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // Zero-Friction Capture Handler
+    async function handleCapture() {
+      playBeep();
+      triggerHaptics();
+      triggerFlash();
+
+      if (!isOcrReady) {
+        showToast('OCR startet noch kurz...');
+        return;
+      }
+
+      if (isProcessing) return;
+      isProcessing = true;
+
+      try {
+        // Pass 1: Enhanced Grayscale
+        let canvas = extractAccurateSlot(false);
+        let result = await tesseractWorker.recognize(canvas);
+        let cleaned = cleanCardText(result.data.text);
+
+        // Pass 2 Fallback: If title has foil reflections or too short, retry with adaptive binarization
+        if (!cleaned || cleaned.length < 3) {
+          const binarizedCanvas = extractAccurateSlot(true);
+          const fallbackResult = await tesseractWorker.recognize(binarizedCanvas);
+          const fallbackCleaned = cleanCardText(fallbackResult.data.text);
+          if (fallbackCleaned && fallbackCleaned.length >= cleaned.length) {
+            cleaned = fallbackCleaned;
+          }
+        }
+
+        if (!cleaned || cleaned.length < 2) {
+          cleaned = `Unbekannte Karte #${totalCardsCount + 1}`;
+        }
+
+        addCardToList(cleaned);
+      } catch (err) {
+        console.error('OCR Process Error:', err);
+        addCardToList(`Karte #${totalCardsCount + 1}`);
+      } finally {
+        isProcessing = false;
+      }
+    }
+
+    function addCardToList(cardName) {
+      totalCardsCount++;
+      const currentCount = cardMap.get(cardName) || 0;
+      cardMap.set(cardName, currentCount + 1);
+      renderList();
+    }
+
+    function removeCard(cardName) {
+      const currentCount = cardMap.get(cardName) || 0;
+      if (currentCount <= 1) {
+        cardMap.delete(cardName);
+      } else {
+        cardMap.set(cardName, currentCount - 1);
+      }
+      totalCardsCount = Math.max(0, totalCardsCount - 1);
+      renderList();
+    }
+
+    function renderList() {
+      counterDisplay.textContent = totalCardsCount;
+
+      if (cardMap.size === 0) {
+        emptyListPlaceholder.classList.remove('hidden');
+        cardsListContainer.innerHTML = '';
+        cardsListContainer.appendChild(emptyListPlaceholder);
+        return;
+      }
+
+      emptyListPlaceholder.classList.add('hidden');
+      cardsListContainer.innerHTML = '';
+
+      cardMap.forEach((count, name) => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between bg-[#151c2e] border border-slate-700/60 rounded-xl px-3 py-2 text-xs hover:border-amber-400/30 transition';
+        
+        item.innerHTML = `
+          <div class="flex items-center space-x-2.5 truncate mr-2">
+            <span class="text-[11px] font-mono font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">${count}x</span>
+            <span class="font-bold text-slate-100 truncate">${escapeHtml(name)}</span>
+          </div>
+          <button title="Entfernen" class="text-slate-500 hover:text-rose-400 p-1 transition" onclick="removeCard('${escapeHtml(name)}')">
+            ✕
+          </button>
+        `;
+        cardsListContainer.appendChild(item);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    function buildAggregatedDecklist() {
+      const lines = [];
+      cardMap.forEach((count, name) => {
+        lines.push(`${count}x ${name}`);
+      });
+      return lines.join('\n');
+    }
+
+    function copyToClipboard(text, successMsg = 'In Zwischenablage kopiert! 📋') {
+      const tempArea = document.createElement('textarea');
+      tempArea.value = text;
+      tempArea.style.position = 'fixed';
+      tempArea.style.opacity = '0';
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg);
+      } catch (e) {
+        console.error('Clipboard copy error:', e);
+      }
+      document.body.removeChild(tempArea);
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 2000);
+    }
+
+    function showCustomAlert(htmlContent) {
+      const customAlert = document.getElementById('customAlert');
+      const customAlertText = document.getElementById('customAlertText');
+      customAlertText.innerHTML = htmlContent;
+      customAlert.classList.remove('hidden');
+    }
+
+    // Helper: Query YGOPRODeck API to fetch Card Metadata (Passcode ID & Card Frame/Type)
+    async function queryYgoCardInfo(cardName) {
+      // 1. Try Exact English Name
+      try {
+        let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(cardName)}`);
+        if (res.ok) {
+          let json = await res.json();
+          if (json.data && json.data.length > 0) return json.data[0];
+        }
+      } catch (e) {}
+
+      // 2. Try German Language Parameter
+      try {
+        let resDe = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(cardName)}&language=de`);
+        if (resDe.ok) {
+          let jsonDe = await resDe.json();
+          if (jsonDe.data && jsonDe.data.length > 0) return jsonDe.data[0];
+        }
+      } catch (e) {}
+
+      // 3. Fuzzy search by fuzzy name (fname)
+      try {
+        let resFname = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(cardName)}`);
+        if (resFname.ok) {
+          let jsonFname = await resFname.json();
+          if (jsonFname.data && jsonFname.data.length > 0) return jsonFname.data[0];
+        }
+      } catch (e) {}
+
+      return null;
+    }
+
+    // Export 1: Gemini AI Deck Prompt
+    copyGeminiBtn.addEventListener('click', () => {
+      if (totalCardsCount === 0) {
+        showToast('Liste ist noch leer!');
+        return;
+      }
+      const prompt = `Hallo Gemini! Hier ist meine gescannte Yu-Gi-Oh! Deckliste:\n\n${buildAggregatedDecklist()}\n\nBitte erstelle mir dynamische Deck-Empfehlungen:\n1. Welche Archetypen, Combos und Synergien passen am besten zu diesem Pool?\n2. Welche essentiellen Staples (Handtraps, Boardbreaker, Extra-Deck-Monster) fehlen mir noch?\n3. Baue mir eine spielstarke, optimierte 40-Karten Main-Deck Liste inklusive Extra Deck aus diesem Grundstock.`;
+      copyToClipboard(prompt, 'Gemini Prompt kopiert! 📋');
+    });
+
+    // Export 2: Raw Text File (.txt)
+    exportTxtBtn.addEventListener('click', () => {
+      if (totalCardsCount === 0) {
+        showToast('Keine Karten vorhanden!');
+        return;
+      }
+      const data = `# Yu-Gi-Oh! Deckliste (Gescanned)\n# Erstellt mit YGO Instant Scanner\n# Gesamtzahl Karten: ${totalCardsCount}\n\n${buildAggregatedDecklist()}`;
+      const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ygo-deck-${Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('.TXT exportiert!');
+    });
+
+    // Export 3: Konami Neuron Deck Format
+    exportNeuronBtn.addEventListener('click', async () => {
+      if (totalCardsCount === 0) {
+        showToast('Keine Karten vorhanden!');
+        return;
+      }
+
+      const originalText = exportNeuronText.textContent;
+      exportNeuronText.textContent = 'Sortiere...';
+      exportNeuronBtn.disabled = true;
+
+      try {
+        const monsters = [];
+        const spells = [];
+        const traps = [];
+        const extra = [];
+        const unresolved = [];
+
+        for (const [cardName, count] of cardMap.entries()) {
+          const cardInfo = await queryYgoCardInfo(cardName);
+          const line = `${count}x ${cardInfo ? cardInfo.name : cardName}`;
+
+          if (!cardInfo) {
+            monsters.push(line);
+            unresolved.push(cardName);
+            continue;
+          }
+
+          const type = (cardInfo.type || '').toLowerCase();
+          if (type.includes('fusion') || type.includes('synchro') || type.includes('xyz') || type.includes('link')) {
+            extra.push(line);
+          } else if (type.includes('spell')) {
+            spells.push(line);
+          } else if (type.includes('trap')) {
+            traps.push(line);
+          } else {
+            monsters.push(line);
+          }
+        }
+
+        let neuronFormat = `== Main Deck ==\n`;
+        if (monsters.length) neuronFormat += `[Monster]\n${monsters.join('\n')}\n\n`;
+        if (spells.length) neuronFormat += `[Spell]\n${spells.join('\n')}\n\n`;
+        if (traps.length) neuronFormat += `[Trap]\n${traps.join('\n')}\n\n`;
+        if (extra.length) neuronFormat += `== Extra Deck ==\n${extra.join('\n')}\n\n`;
+
+        copyToClipboard(neuronFormat, 'Neuron Liste kopiert! 📋');
+
+        if (unresolved.length > 0) {
+          showCustomAlert(`Einige Kartennamen wurden nicht eindeutig in der Datenbank gefunden und unter [Monster] eingeordnet:<br><br>${unresolved.map(c => `• ${escapeHtml(c)}`).join('<br>')}`);
+        }
+      } catch (err) {
+        console.error('Neuron Export Error:', err);
+        showToast('Fehler bei Neuron-Export.');
+      } finally {
+        exportNeuronText.textContent = originalText;
+        exportNeuronBtn.disabled = false;
+      }
+    });
+
+    // Export 4: YGOPro (.ydk) with Passcode IDs and Extra Deck separation
+    exportYdkBtn.addEventListener('click', async () => {
+      if (totalCardsCount === 0) {
+        showToast('Keine Karten vorhanden!');
+        return;
+      }
+
+      const originalText = exportYdkText.textContent;
+      exportYdkText.textContent = 'Lade IDs...';
+      exportYdkBtn.disabled = true;
+      exportYdkBtn.classList.add('opacity-70', 'cursor-not-allowed');
+
+      const mainDeckIds = [];
+      const extraDeckIds = [];
+      const missingCards = [];
+
+      try {
+        for (const [cardName, count] of cardMap.entries()) {
+          const cardInfo = await queryYgoCardInfo(cardName);
+
+          if (cardInfo && cardInfo.id) {
+            const cardId = cardInfo.id;
+            const type = (cardInfo.type || '').toLowerCase();
+            const isExtra = type.includes('fusion') || type.includes('synchro') || type.includes('xyz') || type.includes('link');
+
+            for (let i = 0; i < count; i++) {
+              if (isExtra) {
+                extraDeckIds.push(cardId);
+              } else {
+                mainDeckIds.push(cardId);
+              }
+            }
+          } else {
+            missingCards.push(cardName);
+          }
+        }
+
+        // Generate official YGOPro .ydk Structure
+        let ydkContent = `#created by YGO Instant Scanner\n#main\n`;
+        mainDeckIds.forEach(id => { ydkContent += `${id}\n`; });
+        ydkContent += `#extra\n`;
+        extraDeckIds.forEach(id => { ydkContent += `${id}\n`; });
+        ydkContent += `!side\n`;
+
+        const blob = new Blob([ydkContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `deck-${Date.now()}.ydk`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('.YDK Datei heruntergeladen!');
+
+        if (missingCards.length > 0) {
+          showCustomAlert(`Folgende Karten konnten in der offiziellen Datenbank nicht gefunden werden und fehlen in der YDK-Datei:<br><br>${missingCards.map(c => `• ${escapeHtml(c)}`).join('<br>')}`);
+        }
+      } catch (err) {
+        console.error('YDK Export Error:', err);
+        showToast('Fehler bei der YDK-Generierung.');
+      } finally {
+        exportYdkText.textContent = originalText;
+        exportYdkBtn.disabled = false;
+        exportYdkBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+      }
+    });
+
+    // Mock Card Injection for Desktops or Camera-denied devices
+    function injectMockCard() {
+      const mockCards = [
+        'Dunkler Magier',
+        'Blauäugiger weißer Drache',
+        'Aschenblüte & Freudiger Frühling',
+        'Topf des Wohlstands',
+        'Wiedergeburt',
+        'Gefallener von Albaz',
+        'Feierliches Urteil',
+        'Kosmoszyklon',
+        'Zugangskodier-Sprecher'
+      ];
+      const random = mockCards[Math.floor(Math.random() * mockCards.length)];
+      playBeep();
+      triggerHaptics();
+      triggerFlash();
+      addCardToList(random);
+    }
+
+    // UI Event Listeners
+    captureBtn.addEventListener('click', () => {
+      if (!currentStream) {
+        injectMockCard();
+      } else {
+        handleCapture();
+      }
+    });
+
+    switchCameraBtn.addEventListener('click', () => {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      startCamera();
+    });
+
+    clearListBtn.addEventListener('click', () => {
+      cardMap.clear();
+      totalCardsCount = 0;
+      renderList();
+      showToast('Liste geleert');
+    });
+
+    useMockBtn.addEventListener('click', () => {
+      cameraFallbackOverlay.classList.add('hidden');
+      injectMockCard();
+    });
+
+    // Expose for inline buttons
+    window.removeCard = removeCard;
+
+    // Bootstrapping
+    window.addEventListener('DOMContentLoaded', () => {
+      initOcr();
+      startCamera();
+    });
+  </script>
+</body>
+</html>

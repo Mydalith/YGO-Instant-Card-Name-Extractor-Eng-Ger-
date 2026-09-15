@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>YGO Instant Scanner</title>
+    <title>YGO Instant Scanner & Database</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
@@ -14,49 +14,86 @@
             --text-light: #e2e8f0;
             --success-green: #10b981;
             --error-red: #ef4444;
+            --border-color: #2d3748;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
-        header { background: var(--bg-panel); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid #2d3748; flex-shrink: 0; }
+        /* HEADER */
+        header { 
+            background: var(--bg-panel); 
+            padding: 8px 14px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            z-index: 10; 
+            border-bottom: 1px solid var(--border-color); 
+            flex-shrink: 0; 
+        }
         .logo-area { display: flex; align-items: center; gap: 8px; }
-        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #FFB703, #FF8C00); border-radius: 8px; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #000; font-size: 16px; }
-        .title-group h1 { font-size: 15px; font-weight: 700; color: var(--primary); }
+        .logo-icon { 
+            width: 30px; height: 30px; 
+            background: linear-gradient(135deg, #FFB703, #FF8C00); 
+            border-radius: 8px; 
+            display: flex; justify-content: center; align-items: center; 
+            font-weight: bold; color: #000; font-size: 15px; 
+        }
+        .title-group h1 { font-size: 14px; font-weight: 700; color: var(--primary); line-height: 1.1; }
         .title-group p { font-size: 10px; color: #a0aec0; }
         
-        .status-container { display: flex; gap: 6px; }
-        .status-pill { display: flex; align-items: center; gap: 5px; background: #064e3b; color: #34d399; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; border: 1px solid #047857; }
-        .dot { width: 6px; height: 6px; background: #34d399; border-radius: 50%; }
-
-        /* SCANNER VIEWPORT */
-        .scanner-container { 
-            position: relative; 
-            flex: 1.1; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            overflow: hidden; 
-            background: #000; 
+        /* MODE SWITCH TABS */
+        .mode-switch {
+            display: flex;
+            background: #0d1017;
+            padding: 3px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            gap: 2px;
+        }
+        .tab-btn {
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+        .tab-btn.active {
+            background: #252b3d;
+            color: #00f3ff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
-        #camera-feed { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
+        /* VIEW CONTAINER */
+        .view-wrapper {
+            position: relative;
+            flex: 1.1;
+            display: flex;
+            overflow: hidden;
+            background: #000;
         }
+
+        /* SCANNER VIEW */
+        #scanner-view {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden;
+        }
+        #camera-feed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         
         .tunnel-mask {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 58%; 
-            height: 36px; 
-            max-width: 230px;
+            width: 58%; height: 36px; max-width: 230px;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98);
             border: 2px solid var(--neon-cyan);
             border-radius: 4px;
@@ -64,109 +101,180 @@
             pointer-events: none;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-
         .tunnel-mask.flash-success {
             border-color: var(--success-green) !important;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98), 0 0 15px var(--success-green);
         }
-
         .tunnel-mask.flash-error {
             border-color: var(--error-red) !important;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98), 0 0 15px var(--error-red);
         }
-
         .tunnel-label { 
-            position: absolute; 
-            top: -26px; 
-            left: 50%; 
-            transform: translateX(-50%);
-            white-space: nowrap; 
-            text-align: center; 
-            color: #fff; 
-            font-size: 10px; 
-            font-weight: bold; 
-            background: rgba(0,0,0,0.85); 
-            padding: 2px 8px; 
-            border-radius: 4px; 
-            transition: color 0.2s;
+            position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+            white-space: nowrap; text-align: center; color: #fff; font-size: 10px; 
+            font-weight: bold; background: rgba(0,0,0,0.85); padding: 2px 8px; border-radius: 4px; 
         }
-        
         .laser-line { 
-            width: 100%; 
-            height: 2px; 
-            background: var(--primary); 
-            position: absolute; 
-            top: 50%; 
-            box-shadow: 0 0 8px var(--primary); 
-            animation: scan 2s ease-in-out infinite; 
-            opacity: 0.8; 
+            width: 100%; height: 2px; background: var(--primary); 
+            position: absolute; top: 50%; box-shadow: 0 0 8px var(--primary); 
+            animation: scan 2s ease-in-out infinite; opacity: 0.8; 
         }
 
-        .tools-overlay { 
-            position: absolute; 
-            bottom: 8px; 
-            right: 8px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: flex-end; 
-            gap: 6px; 
-            z-index: 10; 
-        }
-        .tool-btn { 
-            background: rgba(20, 24, 35, 0.85); 
-            border: 1px solid rgba(255,255,255,0.25); 
-            color: white; 
-            border-radius: 6px; 
-            padding: 4px 8px; 
-            font-size: 11px; 
-            font-weight: 600; 
-            cursor: pointer; 
-        }
+        .tools-overlay { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 10; }
+        .tool-btn { background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
         #torch-btn { width: 34px; height: 34px; border-radius: 50%; font-size: 14px; display: none; }
-        .preview-canvas-container { 
-            border: 1px solid #00f3ff; 
-            border-radius: 4px; 
-            overflow: hidden; 
-            background: #000; 
-        }
+        .preview-canvas-container { border: 1px solid var(--neon-cyan); border-radius: 4px; overflow: hidden; background: #000; }
         #debug-canvas { max-width: 110px; height: auto; display: block; }
 
-        /* CONTROLS */
-        .controls-panel { padding: 10px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+        /* DATABASE MANUAL SEARCH VIEW */
+        #database-view {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0b0d14;
+            display: none;
+            flex-direction: column;
+            padding: 10px 14px;
+            z-index: 5;
+        }
+        .search-bar-wrap {
+            display: flex;
+            align-items: center;
+            background: #161a26;
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            padding: 6px 10px;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .search-bar-wrap:focus-within {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 8px rgba(0, 243, 255, 0.2);
+        }
+        .search-bar-wrap input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .search-bar-wrap input::placeholder { color: #64748b; font-size: 13px; }
+        .clear-search-btn {
+            background: none; border: none; color: #64748b; font-size: 14px; cursor: pointer; padding: 2px 6px;
+        }
+        #db-results-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .db-result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        .db-card-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            gap: 1px;
+        }
+        .db-card-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e2e8f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .db-card-tag {
+            font-size: 9px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        .db-add-btn {
+            background: #22293a;
+            border: 1px solid #3b4661;
+            color: var(--primary);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.1s ease;
+        }
+        .db-add-btn:active {
+            background: var(--primary);
+            color: #000;
+            transform: scale(0.92);
+        }
+
+        /* LIVE LIST AREA */
+        .list-container { 
+            flex: 1; 
+            background: var(--bg-panel); 
+            margin: 0 14px; 
+            border-radius: 10px 10px 0 0; 
+            border: 1px solid var(--border-color); 
+            border-bottom: none; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        .list-header { 
+            padding: 8px 12px; 
+            background: rgba(0,0,0,0.25); 
+            border-bottom: 1px solid var(--border-color); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 12px; 
+        }
+        .clear-btn { color: #f87171; background: none; border: none; font-size: 11px; cursor: pointer; }
+        
+        #card-list-ui { flex: 1; overflow-y: auto; padding: 6px 8px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+        .card-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); padding: 5px 10px; border-radius: 6px; font-size: 13px; }
+        .card-left { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+        .card-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-qty { background: rgba(255,183,3,0.18); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; flex-shrink: 0; }
+        .delete-item-btn { color: #718096; background: none; border: none; font-size: 14px; padding: 0 4px; cursor: pointer; }
+
+        /* CONTROLS (ONLY IN SCANNER VIEW) */
+        .controls-panel { padding: 8px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
         .main-action-row { display: flex; gap: 10px; }
         
         #scan-btn {
             flex: 1;
             background: linear-gradient(180deg, #FFC933 0%, #FFB703 100%);
             color: #000; border: none; border-radius: 10px;
-            padding: 14px; font-size: 16px; font-weight: 800;
+            padding: 13px; font-size: 15px; font-weight: 800;
             display: flex; justify-content: center; align-items: center; gap: 8px;
             box-shadow: 0 4px 12px rgba(255, 183, 3, 0.3);
             cursor: pointer;
-            transition: opacity 0.1s;
         }
         #scan-btn:active { transform: scale(0.97); }
         #scan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        .counter-box { background: var(--bg-panel); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 70px; border: 1px solid #2d3748; }
+        .counter-box { background: var(--bg-panel); border-radius: 10px; padding: 6px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 65px; border: 1px solid var(--border-color); }
         .counter-box span { font-size: 9px; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
-        .counter-box strong { font-size: 18px; color: var(--primary); }
-
-        /* LIST AREA */
-        .list-container { flex: 1; background: var(--bg-panel); margin: 0 14px; border-radius: 10px 10px 0 0; border: 1px solid #2d3748; border-bottom: none; display: flex; flex-direction: column; overflow: hidden; }
-        .list-header { padding: 8px 12px; background: rgba(0,0,0,0.2); border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-        .clear-btn { color: #f87171; background: none; border: none; font-size: 11px; cursor: pointer; }
-        
-        #card-list-ui { flex: 1; overflow-y: auto; padding: 8px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
-        .card-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-        .card-left { display: flex; align-items: center; gap: 8px; overflow: hidden; }
-        .card-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-qty { background: rgba(255,183,3,0.2); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; flex-shrink: 0; }
-        .delete-item-btn { color: #718096; background: none; border: none; font-size: 14px; padding: 0 4px; cursor: pointer; }
+        .counter-box strong { font-size: 17px; color: var(--primary); }
 
         /* EXPORT ROW */
-        .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px 14px; background: var(--bg-panel); border-top: 1px solid #2d3748; flex-shrink: 0; }
-        .export-btn { background: #2d3748; color: #fff; border: none; padding: 9px; border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 4px; cursor: pointer; }
+        .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px 14px; background: var(--bg-panel); border-top: 1px solid var(--border-color); flex-shrink: 0; }
+        .export-btn { background: #2d3748; color: #fff; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 4px; cursor: pointer; }
         .export-btn.gemini { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
         .export-btn.ydk { background: #059669; }
 
@@ -183,39 +291,58 @@
         <div class="logo-area">
             <div class="logo-icon">📷</div>
             <div class="title-group">
-                <h1>YGO INSTANT SCANNER</h1>
-                <p>Zero-Popup Deckliste</p>
+                <h1>YGO INSTANT</h1>
+                <p id="sub-title-txt">Scanner Modus</p>
             </div>
         </div>
-        <div class="status-container">
-            <div class="status-pill"><div class="dot"></div> API Sync</div>
-            <div class="status-pill" id="ocr-status"><div class="dot"></div> OCR</div>
+        
+        <!-- MODUS-UMSCHALTER -->
+        <div class="mode-switch">
+            <button class="tab-btn active" id="tab-scanner" onclick="switchMode('scanner')">📷 Scanner</button>
+            <button class="tab-btn" id="tab-database" onclick="switchMode('database')">🔍 DB Suche</button>
         </div>
     </header>
 
-    <div class="scanner-container" id="scanner-box">
-        <video id="camera-feed" autoplay playsinline muted></video>
-        <div class="tunnel-mask" id="tunnel-hole">
-            <div class="tunnel-label" id="tunnel-label-txt">KARTENNAME HIER</div>
-            <div class="laser-line"></div>
-        </div>
-        
-        <div class="tools-overlay">
-            <button class="tool-btn" id="torch-btn" onclick="toggleTorch()">🔦</button>
-            <div class="preview-canvas-container" title="Exakte OCR-Aufnahme">
-                <canvas id="debug-canvas"></canvas>
+    <div class="view-wrapper">
+        <!-- 1. SCANNER ANSICHT -->
+        <div id="scanner-view">
+            <video id="camera-feed" autoplay playsinline muted></video>
+            <div class="tunnel-mask" id="tunnel-hole">
+                <div class="tunnel-label" id="tunnel-label-txt">KARTENNAME HIER</div>
+                <div class="laser-line"></div>
             </div>
+            
+            <div class="tools-overlay">
+                <button class="tool-btn" id="torch-btn" onclick="toggleTorch()">🔦</button>
+                <div class="preview-canvas-container" title="Exakte OCR-Aufnahme">
+                    <canvas id="debug-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. MANUELLE DATENBANK ECHTZEIT-FILTER ANSICHT -->
+        <div id="database-view">
+            <div class="search-bar-wrap">
+                <span style="color: #64748b; font-size: 14px;">🔍</span>
+                <input type="text" id="db-search-input" placeholder="Name tippen (DE oder EN)..." autocomplete="off" oninput="handleRealtimeSearch()">
+                <button class="clear-search-btn" onclick="clearSearchInput()">✕</button>
+            </div>
+            <ul id="db-results-list">
+                <!-- Live-Filterergebnisse erscheinen hier -->
+            </ul>
         </div>
     </div>
 
+    <!-- LIVE-LISTE (IMMER SICHTBAR) -->
     <div class="list-container">
         <div class="list-header">
-            <span>📋 Live-Liste (Verifizierte Karten)</span>
+            <span>📋 Live-Deckliste</span>
             <button class="clear-btn" onclick="clearList()">Liste leeren</button>
         </div>
         <ul id="card-list-ui"></ul>
     </div>
 
+    <!-- SCANNER BUTTON & COUNTER -->
     <div class="controls-panel">
         <div class="main-action-row">
             <button id="scan-btn" onclick="captureAndScan()" disabled>
@@ -227,6 +354,7 @@
             </div>
         </div>
         
+        <!-- EXPORTS -->
         <div class="export-row">
             <button class="export-btn gemini" onclick="exportGemini()">✨ Gemini Prompt</button>
             <button class="export-btn ydk" onclick="exportYDK()">🔻 YGOPro .YDK</button>
@@ -241,36 +369,25 @@
     </div>
 
     <script>
+        let currentMode = 'scanner'; // 'scanner' oder 'database'
         let video = document.getElementById('camera-feed');
         let tunnelHole = document.getElementById('tunnel-hole');
         let tunnelLabel = document.getElementById('tunnel-label-txt');
         let debugCanvas = document.getElementById('debug-canvas');
         let torchBtn = document.getElementById('torch-btn');
-        let scannerBox = document.getElementById('scanner-box');
+        let scannerView = document.getElementById('scanner-view');
+        let databaseView = document.getElementById('database-view');
         let scanBtn = document.getElementById('scan-btn');
+        let dbSearchInput = document.getElementById('db-search-input');
+        let dbResultsList = document.getElementById('db-results-list');
         
         let worker = null;
         let cardList = [];
         let videoTrack = null;
         let torchEnabled = false;
 
-        // Persistenter lokaler Cache (Karten müssen nur 1x online geprüft werden)
-        let verifiedCardsMap = new Map();
-        try {
-            const saved = localStorage.getItem('ygo_verified_cache_v2');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                for (const [k, v] of Object.entries(parsed)) verifiedCardsMap.set(k, v);
-            }
-        } catch(e){}
-
-        function saveCacheEntry(normKey, cardObj) {
-            verifiedCardsMap.set(normKey, cardObj);
-            try {
-                const obj = Object.fromEntries(verifiedCardsMap);
-                localStorage.setItem('ygo_verified_cache_v2', JSON.stringify(obj));
-            } catch(e){}
-        }
+        // Vollständiger In-Memory Index (DE + EN)
+        let dbIndex = []; 
 
         const renderCanvas = document.createElement('canvas');
         const renderCtx = renderCanvas.getContext('2d', { willReadFrequently: true });
@@ -281,7 +398,7 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'sine';
-            const f = success ? 1046 : 220; // Hohes C (Erfolg) oder tiefer Brummton (Fehler)
+            const f = success ? 1046 : 220;
             osc.frequency.setValueAtTime(f, audioCtx.currentTime);
             if (success) {
                 osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.1);
@@ -299,9 +416,8 @@
 
         function triggerFlash(success = true, msg = "") {
             tunnelHole.classList.remove('flash-success', 'flash-error');
-            void tunnelHole.offsetWidth; // Reflow trigger
+            void tunnelHole.offsetWidth;
             tunnelHole.classList.add(success ? 'flash-success' : 'flash-error');
-            
             if (msg) {
                 tunnelLabel.innerText = msg;
                 tunnelLabel.style.color = success ? '#34d399' : '#f87171';
@@ -313,22 +429,39 @@
             }, 1200);
         }
 
+        // MODUS WECHSELN
+        function switchMode(mode) {
+            currentMode = mode;
+            if (mode === 'scanner') {
+                document.getElementById('tab-scanner').classList.add('active');
+                document.getElementById('tab-database').classList.remove('active');
+                scannerView.style.display = 'flex';
+                databaseView.style.display = 'none';
+                scanBtn.style.display = 'flex';
+                document.getElementById('sub-title-txt').innerText = "Scanner Modus";
+            } else {
+                document.getElementById('tab-scanner').classList.remove('active');
+                document.getElementById('tab-database').classList.add('active');
+                scannerView.style.display = 'none';
+                databaseView.style.display = 'flex';
+                scanBtn.style.display = 'none'; // Im DB-Modus tippt man direkt auf die Plus-Buttons
+                document.getElementById('sub-title-txt').innerText = "DB Suche (DE / EN)";
+                dbSearchInput.focus();
+                handleRealtimeSearch();
+            }
+        }
+
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: 'environment', 
-                        focusMode: 'continuous',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
+                    video: { facingMode: 'environment', focusMode: 'continuous', width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
                 video.srcObject = stream;
                 videoTrack = stream.getVideoTracks()[0];
                 const cap = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
                 if (cap.torch) torchBtn.style.display = 'flex';
             } catch (err) {
-                alert("Kamera-Zugriff nicht möglich: " + err.message);
+                alert("Kamera nicht verfügbar: " + err.message);
             }
         }
 
@@ -339,6 +472,78 @@
             torchBtn.style.background = torchEnabled ? 'rgba(255, 183, 3, 0.4)' : 'rgba(20, 24, 35, 0.85)';
         }
 
+        // OFFLINE INDEXED-DB FÜR ALLE DEUTSCHEN & ENGLISCHEN KARTEN
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open('YGOScannerDB', 1);
+                req.onupgradeneeded = () => req.result.createObjectStore('cards');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function loadComprehensiveDatabase() {
+            try {
+                const idb = await openDB();
+                const cached = await new Promise(res => {
+                    const tx = idb.transaction('cards', 'readonly');
+                    const req = tx.objectStore('cards').get('all_cards');
+                    req.onsuccess = () => res(req.result);
+                    req.onerror = () => res(null);
+                });
+
+                if (cached && cached.length > 0) {
+                    dbIndex = cached;
+                    return;
+                }
+
+                // 1. Englische Karten
+                const resEn = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php');
+                const dataEn = await resEn.json();
+
+                // 2. Deutsche Karten
+                const resDe = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de');
+                const dataDe = await resDe.json();
+
+                const map = new Map();
+                if (dataEn && dataEn.data) {
+                    dataEn.data.forEach(c => {
+                        const t = (c.type || '').toLowerCase();
+                        const isEx = t.includes('fusion') || t.includes('synchro') || t.includes('xyz') || t.includes('link');
+                        const item = {
+                            realName: c.name,
+                            clean: normalize(c.name),
+                            id: c.id,
+                            isExtra: isEx,
+                            type: c.type,
+                            lang: 'EN'
+                        };
+                        map.set(c.id, item);
+                        dbIndex.push(item);
+                    });
+                }
+
+                if (dataDe && dataDe.data) {
+                    dataDe.data.forEach(c => {
+                        const enItem = map.get(c.id);
+                        dbIndex.push({
+                            realName: c.name,
+                            clean: normalize(c.name),
+                            id: c.id,
+                            isExtra: enItem ? enItem.isExtra : false,
+                            type: enItem ? enItem.type : c.type,
+                            lang: 'DE'
+                        });
+                    });
+                }
+
+                const tx = idb.transaction('cards', 'readwrite');
+                tx.objectStore('cards').put(dbIndex, 'all_cards');
+            } catch (e) {
+                console.warn("DB-Ladefehler:", e);
+            }
+        }
+
         async function initOCR() {
             try {
                 worker = await Tesseract.createWorker(['deu', 'eng']);
@@ -346,18 +551,69 @@
                     tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
                     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß0123456789 -,'&!"
                 });
-                const ocrStatus = document.getElementById('ocr-status');
-                ocrStatus.classList.add('ready');
                 scanBtn.disabled = false;
             } catch (e) {
-                document.getElementById('ocr-status').innerText = 'OCR Error';
+                console.error(e);
             }
         }
 
         startCamera();
+        loadComprehensiveDatabase();
         initOCR();
 
-        // CAPTURE UND VERIFIZIERUNG
+        // ECHTZEIT-FILTERUNG FÜR DIE MANUELLE SUCHE (< 3ms)
+        function handleRealtimeSearch() {
+            const query = normalize(dbSearchInput.value.trim());
+            dbResultsList.innerHTML = '';
+
+            if (query.length < 2) {
+                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:12px; text-align:center; padding:20px;">Mindestens 2 Buchstaben eingeben...</li>';
+                return;
+            }
+
+            let matches = [];
+            for (let i = 0; i < dbIndex.length; i++) {
+                const c = dbIndex[i];
+                if (c.clean.includes(query)) {
+                    matches.push(c);
+                    if (matches.length >= 40) break; // Begrenzung auf 40 Treffer für flüssiges 60 FPS Scrollen
+                }
+            }
+
+            if (matches.length === 0) {
+                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:12px; text-align:center; padding:20px;">Keine Karte gefunden.</li>';
+                return;
+            }
+
+            // Rendert ausschließlich Namen + Plus-Button
+            matches.forEach(card => {
+                const li = document.createElement('li');
+                li.className = 'db-result-item';
+                li.innerHTML = `
+                    <div class="db-card-info">
+                        <span class="db-card-name">${escapeHtml(card.realName)}</span>
+                        <span class="db-card-tag">${card.lang} • ${card.isExtra ? 'Extra Deck' : 'Main Deck'}</span>
+                    </div>
+                    <button class="db-add-btn" title="Zur Liste hinzufügen">＋</button>
+                `;
+                li.querySelector('.db-add-btn').onclick = () => addCardFromDb(card);
+                dbResultsList.appendChild(li);
+            });
+        }
+
+        function clearSearchInput() {
+            dbSearchInput.value = '';
+            handleRealtimeSearch();
+            dbSearchInput.focus();
+        }
+
+        function addCardFromDb(card) {
+            playFeedbackSound(true);
+            cardList.push(card);
+            updateUI();
+        }
+
+        // SCANNER LOGIC MIT FUZZY-GATEKEEPER
         async function captureAndScan() {
             if (!worker || video.videoWidth === 0 || scanBtn.disabled) return;
 
@@ -365,8 +621,8 @@
             scanBtn.innerText = "⏳ ERKENNE...";
 
             try {
-                const cW = scannerBox.clientWidth;
-                const cH = scannerBox.clientHeight;
+                const cW = scannerView.clientWidth;
+                const cH = scannerView.clientHeight;
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
 
@@ -381,7 +637,7 @@
                 renderCtx.drawImage(video, rX, rY, rW, rH);
 
                 const boxRect = tunnelHole.getBoundingClientRect();
-                const contRect = scannerBox.getBoundingClientRect();
+                const contRect = scannerView.getBoundingClientRect();
 
                 const cropX = boxRect.left - contRect.left;
                 const cropY = boxRect.top - contRect.top;
@@ -396,10 +652,9 @@
                 dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
 
                 const result = await worker.recognize(debugCanvas);
-                const rawText = (result.data.text || '').trim();
+                const raw = (result.data.text || '').trim();
 
-                // STRIKTER ABGLEICH: Nur geprüfte Karten werden zugelassen!
-                const matchedCard = await resolveCardFromDatabase(rawText);
+                const matchedCard = matchCardFuzzy(raw);
 
                 if (matchedCard) {
                     playFeedbackSound(true);
@@ -407,12 +662,11 @@
                     cardList.push(matchedCard);
                     updateUI();
                 } else {
-                    // Verworfener Scan: KEIN MÜLL WIRD IN DIE LISTE GESCHRIEBEN!
                     playFeedbackSound(false);
                     triggerFlash(false, "Nicht erkannt – Fokus halten");
                 }
-            } catch(err) {
-                console.warn(err);
+            } catch(e) {
+                console.warn(e);
                 playFeedbackSound(false);
             } finally {
                 scanBtn.disabled = false;
@@ -420,151 +674,47 @@
             }
         }
 
-        // DATABASE RESOLVER MIT FUZZY-MATCHING (100% EXAKTE KARTENNAMEN)
-        async function resolveCardFromDatabase(raw) {
-            const clean = raw
-                .replace(/[^a-zA-ZÄÖÜäöüß0-9\s\-,'&]/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
+        function matchCardFuzzy(rawText) {
+            const query = normalize(rawText);
+            if (query.length < 3) return null;
 
-            if (clean.length < 3) return null;
-
-            const normKey = normalize(clean);
-            if (verifiedCardsMap.has(normKey)) {
-                return verifiedCardsMap.get(normKey);
+            // 1. Exakter Treffer
+            for (let i = 0; i < dbIndex.length; i++) {
+                if (dbIndex[i].clean === query) return dbIndex[i];
             }
 
-            // 1. Exakter Datenbank-Match (Englisch & Deutsch)
-            let card = await fetchExact(clean);
-            if (card) {
-                saveCacheEntry(normKey, card);
-                return card;
-            }
-
-            // 2. Exakter Match ohne Zahlen-/Sonderzeichen-Rauschen an den Rändern (z.B. "Kashtira Fenrir 8" -> "Kashtira Fenrir")
-            const trimmedNoise = clean.replace(/^[0-9\W]+|[0-9\W]+$/g, '').trim();
-            if (trimmedNoise !== clean && trimmedNoise.length >= 3) {
-                const trimmedNorm = normalize(trimmedNoise);
-                if (verifiedCardsMap.has(trimmedNorm)) {
-                    const c = verifiedCardsMap.get(trimmedNorm);
-                    saveCacheEntry(normKey, c);
-                    return c;
-                }
-                card = await fetchExact(trimmedNoise);
-                if (card) {
-                    saveCacheEntry(normKey, card);
-                    return card;
-                }
-            }
-
-            // 3. Keyword Fuzzy-Suche via YGOPRODeck API
-            // Extrahiere signifikante Wörter (längere Wörter wie "SUDELKREISCH" oder "KASHTIRA" zuerst)
-            const words = (trimmedNoise || clean).split(/[\s\-]+/).filter(w => w.length >= 4);
-            words.sort((a, b) => b.length - a.length);
-
-            for (let i = 0; i < Math.min(2, words.length); i++) {
-                card = await fetchFuzzy(words[i], normKey);
-                if (card) {
-                    saveCacheEntry(normKey, card);
-                    return card;
-                }
-            }
-
-            return null;
-        }
-
-        async function fetchExact(name) {
-            // Check Englisch
-            try {
-                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`);
-                if (res.ok) {
-                    let data = await res.json();
-                    if (data.data && data.data.length > 0) return formatCard(data.data[0]);
-                }
-            } catch(e){}
-
-            // Check Deutsch
-            try {
-                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}&language=de`);
-                if (res.ok) {
-                    let data = await res.json();
-                    if (data.data && data.data.length > 0) return formatCard(data.data[0]);
-                }
-            } catch(e){}
-
-            return null;
-        }
-
-        async function fetchFuzzy(keyword, targetNorm) {
-            let candidates = [];
-
-            // 1. Suche englische Kandidaten
-            try {
-                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(keyword)}&num=15&offset=0`);
-                if (res.ok) {
-                    let data = await res.json();
-                    if (data.data) candidates.push(...data.data);
-                }
-            } catch(e){}
-
-            // 2. Suche deutsche Kandidaten
-            try {
-                let res = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(keyword)}&language=de&num=15&offset=0`);
-                if (res.ok) {
-                    let data = await res.json();
-                    if (data.data) candidates.push(...data.data);
-                }
-            } catch(e){}
-
-            if (candidates.length === 0) return null;
-
-            let bestMatch = null;
+            // 2. Ähnlichkeitssuche
+            let bestCard = null;
             let highestSim = 0;
 
-            for (const c of candidates) {
-                const cNorm = normalize(c.name);
-                if (cNorm === targetNorm) return formatCard(c);
-
-                const sim = computeSimilarity(targetNorm, cNorm);
+            for (let i = 0; i < dbIndex.length; i++) {
+                const c = dbIndex[i];
+                const sim = computeSimilarity(query, c.clean);
                 if (sim > highestSim) {
                     highestSim = sim;
-                    bestMatch = c;
+                    bestCard = c;
                 }
             }
 
-            // Mindestens 72 % Ähnlichkeit gefordert – schließt Artefakte rigoros aus
             if (highestSim >= 0.72) {
-                return formatCard(bestMatch);
+                return bestCard;
             }
 
             return null;
-        }
-
-        function formatCard(card) {
-            const t = (card.type || '').toLowerCase();
-            const isExtra = t.includes('fusion') || t.includes('synchro') || t.includes('xyz') || t.includes('link');
-            return {
-                realName: card.name,
-                id: card.id,
-                isExtra: isExtra
-            };
         }
 
         function normalize(str) {
             return str.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
         }
 
-        // Dice-Sørensen Bigramm-Ähnlichkeitskoeffizient
         function computeSimilarity(s1, s2) {
             if (s1 === s2) return 1;
             if (s1.length < 2 || s2.length < 2) return 0;
-
             const bg = new Map();
             for (let i = 0; i < s1.length - 1; i++) {
                 const b = s1.substr(i, 2);
                 bg.set(b, (bg.get(b) || 0) + 1);
             }
-
             let matches = 0;
             for (let i = 0; i < s2.length - 1; i++) {
                 const b = s2.substr(i, 2);
@@ -574,10 +724,14 @@
                     matches++;
                 }
             }
-
             return (2.0 * matches) / (s1.length + s2.length - 2);
         }
 
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // LIST UI & MANAGEMENT
         function updateUI() {
             document.getElementById('card-counter').innerText = cardList.length;
             const uiList = document.getElementById('card-list-ui');
@@ -590,7 +744,7 @@
                     <li class="card-item">
                         <div class="card-left">
                             <span class="card-qty">${qty}x</span>
-                            <span class="card-name-txt">${name}</span>
+                            <span class="card-name-txt">${escapeHtml(name)}</span>
                         </div>
                         <button class="delete-item-btn" onclick="removeSingleCard('${name.replace(/'/g, "\\'")}')">✕</button>
                     </li>`;

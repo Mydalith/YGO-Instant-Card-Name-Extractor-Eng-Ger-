@@ -2,51 +2,61 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>YGO Instant Scanner & Database</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --primary: #FFB703;
-            --bg-dark: #0f111a;
-            --bg-panel: #1a1d29;
+            --bg-dark: #0a0c14;
+            --bg-panel: #141824;
             --neon-cyan: #00f3ff;
             --text-light: #e2e8f0;
             --success-green: #10b981;
             --error-red: #ef4444;
-            --border-color: #2d3748;
+            --border-color: #262d40;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: var(--bg-dark); color: var(--text-light); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* FIX FÜR MOBILE DISPLAYHÖHE */
+        body { 
+            background-color: var(--bg-dark); 
+            color: var(--text-light); 
+            height: 100dvh; 
+            max-height: 100dvh;
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+        }
 
         /* HEADER */
         header { 
             background: var(--bg-panel); 
-            padding: 8px 14px; 
+            padding: 8px 12px; 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
             z-index: 10; 
             border-bottom: 1px solid var(--border-color); 
             flex-shrink: 0; 
+            height: 48px;
         }
         .logo-area { display: flex; align-items: center; gap: 8px; }
         .logo-icon { 
-            width: 30px; height: 30px; 
+            width: 28px; height: 28px; 
             background: linear-gradient(135deg, #FFB703, #FF8C00); 
-            border-radius: 8px; 
+            border-radius: 6px; 
             display: flex; justify-content: center; align-items: center; 
-            font-weight: bold; color: #000; font-size: 15px; 
+            font-weight: bold; color: #000; font-size: 14px; 
         }
-        .title-group h1 { font-size: 14px; font-weight: 700; color: var(--primary); line-height: 1.1; }
-        .title-group p { font-size: 10px; color: #a0aec0; }
+        .title-group h1 { font-size: 13px; font-weight: 700; color: var(--primary); line-height: 1.1; }
+        .title-group p { font-size: 9px; color: #94a3b8; }
         
-        /* MODE SWITCH TABS */
         .mode-switch {
             display: flex;
-            background: #0d1017;
-            padding: 3px;
+            background: #090b10;
+            padding: 2px;
             border-radius: 8px;
             border: 1px solid #334155;
             gap: 2px;
@@ -55,29 +65,30 @@
             background: transparent;
             color: #94a3b8;
             border: none;
-            padding: 5px 10px;
+            padding: 4px 8px;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 700;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 4px;
             transition: all 0.15s ease;
         }
         .tab-btn.active {
-            background: #252b3d;
+            background: #1e2638;
             color: #00f3ff;
             box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
-        /* VIEW CONTAINER */
+        /* VIEW CONTAINER (Feste proportionale Höhe) */
         .view-wrapper {
             position: relative;
-            flex: 1.1;
+            height: 34%;
+            min-height: 160px;
+            max-height: 230px;
             display: flex;
             overflow: hidden;
             background: #000;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-color);
         }
 
         /* SCANNER VIEW */
@@ -93,7 +104,7 @@
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 58%; height: 36px; max-width: 230px;
+            width: 58%; height: 34px; max-width: 220px;
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98);
             border: 2px solid var(--neon-cyan);
             border-radius: 4px;
@@ -110,7 +121,7 @@
             box-shadow: 0 0 0 9999px rgba(5, 5, 8, 0.98), 0 0 15px var(--error-red);
         }
         .tunnel-label { 
-            position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+            position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
             white-space: nowrap; text-align: center; color: #fff; font-size: 10px; 
             font-weight: bold; background: rgba(0,0,0,0.85); padding: 2px 8px; border-radius: 4px; 
         }
@@ -120,113 +131,49 @@
             animation: scan 2s ease-in-out infinite; opacity: 0.8; 
         }
 
-        .tools-overlay { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 10; }
-        .tool-btn { background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
-        #torch-btn { width: 34px; height: 34px; border-radius: 50%; font-size: 14px; display: none; }
+        .tools-overlay { position: absolute; bottom: 6px; right: 6px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; z-index: 10; }
+        .tool-btn { background: rgba(20, 24, 35, 0.85); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 4px 6px; font-size: 10px; font-weight: 600; cursor: pointer; }
+        #torch-btn { width: 30px; height: 30px; border-radius: 50%; font-size: 12px; display: none; }
         .preview-canvas-container { border: 1px solid var(--neon-cyan); border-radius: 4px; overflow: hidden; background: #000; }
-        #debug-canvas { max-width: 110px; height: auto; display: block; }
+        #debug-canvas { max-width: 90px; height: auto; display: block; }
 
-        /* DATABASE MANUAL SEARCH VIEW */
+        /* DATABASE VIEW */
         #database-view {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: #0b0d14;
             display: none;
             flex-direction: column;
-            padding: 10px 14px;
+            padding: 8px 12px;
             z-index: 5;
         }
         .search-bar-wrap {
             display: flex;
             align-items: center;
             background: #161a26;
-            border: 1px solid #2d3748;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 6px 10px;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-        .search-bar-wrap:focus-within {
-            border-color: var(--neon-cyan);
-            box-shadow: 0 0 8px rgba(0, 243, 255, 0.2);
+            padding: 5px 8px;
+            gap: 6px;
+            margin-bottom: 6px;
         }
         .search-bar-wrap input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #fff;
-            font-size: 14px;
-            font-weight: 500;
+            flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 13px; font-weight: 500;
         }
-        .search-bar-wrap input::placeholder { color: #64748b; font-size: 13px; }
-        .clear-search-btn {
-            background: none; border: none; color: #64748b; font-size: 14px; cursor: pointer; padding: 2px 6px;
-        }
-        #db-results-list {
-            flex: 1;
-            overflow-y: auto;
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .db-result-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            padding: 8px 12px;
-            border-radius: 6px;
-        }
-        .db-card-info {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            gap: 1px;
-        }
-        .db-card-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: #e2e8f0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .db-card-tag {
-            font-size: 9px;
-            font-weight: 700;
-            color: #64748b;
-            text-transform: uppercase;
-        }
-        .db-add-btn {
-            background: #22293a;
-            border: 1px solid #3b4661;
-            color: var(--primary);
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            font-size: 18px;
-            font-weight: bold;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: all 0.1s ease;
-        }
-        .db-add-btn:active {
-            background: var(--primary);
-            color: #000;
-            transform: scale(0.92);
-        }
+        .clear-search-btn { background: none; border: none; color: #64748b; font-size: 13px; cursor: pointer; }
+        #db-results-list { flex: 1; overflow-y: auto; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .db-result-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 6px 10px; border-radius: 6px; }
+        .db-card-name { font-size: 12px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+        .db-card-tag { font-size: 8px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .db-add-btn { background: #22293a; border: 1px solid #3b4661; color: var(--primary); width: 28px; height: 28px; border-radius: 6px; font-size: 16px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; flex-shrink: 0; }
+        .db-add-btn:active { background: var(--primary); color: #000; }
 
-        /* LIVE LIST AREA */
+        /* LIVE LIST AREA (FLEX-GROW, SCROLLBAR) */
         .list-container { 
             flex: 1; 
+            min-height: 80px;
             background: var(--bg-panel); 
-            margin: 0 14px; 
+            margin: 0 10px; 
             border-radius: 10px 10px 0 0; 
             border: 1px solid var(--border-color); 
             border-bottom: none; 
@@ -235,51 +182,76 @@
             overflow: hidden; 
         }
         .list-header { 
-            padding: 8px 12px; 
+            padding: 6px 12px; 
             background: rgba(0,0,0,0.25); 
             border-bottom: 1px solid var(--border-color); 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
-            font-size: 12px; 
+            font-size: 11px; 
         }
-        .clear-btn { color: #f87171; background: none; border: none; font-size: 11px; cursor: pointer; }
-        
-        #card-list-ui { flex: 1; overflow-y: auto; padding: 6px 8px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
-        .card-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); padding: 5px 10px; border-radius: 6px; font-size: 13px; }
-        .card-left { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+        .clear-btn { color: #f87171; background: none; border: none; font-size: 10px; cursor: pointer; }
+        #card-list-ui { flex: 1; overflow-y: auto; padding: 6px 8px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .card-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+        .card-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
         .card-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-qty { background: rgba(255,183,3,0.18); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; flex-shrink: 0; }
-        .delete-item-btn { color: #718096; background: none; border: none; font-size: 14px; padding: 0 4px; cursor: pointer; }
+        .card-qty { background: rgba(255,183,3,0.18); color: var(--primary); padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 10px; flex-shrink: 0; }
+        .delete-item-btn { color: #718096; background: none; border: none; font-size: 13px; padding: 0 4px; cursor: pointer; }
 
-        /* CONTROLS (ONLY IN SCANNER VIEW) */
-        .controls-panel { padding: 8px 14px; background: var(--bg-dark); z-index: 10; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-        .main-action-row { display: flex; gap: 10px; }
+        /* CONTROLS & EXPORT PANEL (GARANTIERT SICHTBAR AM DISPLAY-ENDE) */
+        .controls-panel { 
+            padding: 6px 10px calc(8px + env(safe-area-inset-bottom)) 10px; 
+            background: var(--bg-dark); 
+            z-index: 10; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 6px; 
+            flex-shrink: 0; 
+        }
+        .main-action-row { display: flex; gap: 8px; }
         
         #scan-btn {
             flex: 1;
             background: linear-gradient(180deg, #FFC933 0%, #FFB703 100%);
-            color: #000; border: none; border-radius: 10px;
-            padding: 13px; font-size: 15px; font-weight: 800;
-            display: flex; justify-content: center; align-items: center; gap: 8px;
-            box-shadow: 0 4px 12px rgba(255, 183, 3, 0.3);
+            color: #000; border: none; border-radius: 8px;
+            padding: 12px; font-size: 15px; font-weight: 800;
+            display: flex; justify-content: center; align-items: center; gap: 6px;
+            box-shadow: 0 3px 10px rgba(255, 183, 3, 0.3);
             cursor: pointer;
         }
         #scan-btn:active { transform: scale(0.97); }
         #scan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        .counter-box { background: var(--bg-panel); border-radius: 10px; padding: 6px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 65px; border: 1px solid var(--border-color); }
-        .counter-box span { font-size: 9px; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
-        .counter-box strong { font-size: 17px; color: var(--primary); }
+        .counter-box { background: var(--bg-panel); border-radius: 8px; padding: 4px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px; border: 1px solid var(--border-color); }
+        .counter-box span { font-size: 8px; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
+        .counter-box strong { font-size: 16px; color: var(--primary); line-height: 1.1; }
 
-        /* EXPORT ROW */
-        .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px 14px; background: var(--bg-panel); border-top: 1px solid var(--border-color); flex-shrink: 0; }
-        .export-btn { background: #2d3748; color: #fff; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 4px; cursor: pointer; }
-        .export-btn.gemini { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
-        .export-btn.ydk { background: #059669; }
+        /* EXPORT BUTTONS GRID */
+        .export-row { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 5px; 
+        }
+        .export-btn { 
+            background: #1e2638; 
+            color: #fff; 
+            border: 1px solid #2d3852; 
+            padding: 8px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 700; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 4px; 
+            cursor: pointer; 
+        }
+        .export-btn:active { transform: scale(0.97); }
+        .export-btn.gemini { background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; }
+        .export-btn.ydk { background: #059669; border: none; }
 
         #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 999; justify-content: center; align-items: center; flex-direction: column; color: white; }
-        .spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--primary); border-radius: 50%; width: 34px; height: 34px; animation: spin 1s linear infinite; margin-bottom: 8px; }
+        .spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 8px; }
 
         @keyframes scan { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -291,12 +263,11 @@
         <div class="logo-area">
             <div class="logo-icon">📷</div>
             <div class="title-group">
-                <h1>YGO INSTANT</h1>
-                <p id="sub-title-txt">Scanner Modus</p>
+                <h1>YGO SCANNER</h1>
+                <p id="sub-title-txt">Bereit</p>
             </div>
         </div>
         
-        <!-- MODUS-UMSCHALTER -->
         <div class="mode-switch">
             <button class="tab-btn active" id="tab-scanner" onclick="switchMode('scanner')">📷 Scanner</button>
             <button class="tab-btn" id="tab-database" onclick="switchMode('database')">🔍 DB Suche</button>
@@ -304,7 +275,7 @@
     </header>
 
     <div class="view-wrapper">
-        <!-- 1. SCANNER ANSICHT -->
+        <!-- 1. SCANNER VIEW -->
         <div id="scanner-view">
             <video id="camera-feed" autoplay playsinline muted></video>
             <div class="tunnel-mask" id="tunnel-hole">
@@ -314,26 +285,24 @@
             
             <div class="tools-overlay">
                 <button class="tool-btn" id="torch-btn" onclick="toggleTorch()">🔦</button>
-                <div class="preview-canvas-container" title="Exakte OCR-Aufnahme">
+                <div class="preview-canvas-container" title="Exakte Aufnahme">
                     <canvas id="debug-canvas"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- 2. MANUELLE DATENBANK ECHTZEIT-FILTER ANSICHT -->
+        <!-- 2. DATABASE SEARCH VIEW -->
         <div id="database-view">
             <div class="search-bar-wrap">
-                <span style="color: #64748b; font-size: 14px;">🔍</span>
+                <span style="color: #64748b; font-size: 13px;">🔍</span>
                 <input type="text" id="db-search-input" placeholder="Name tippen (DE oder EN)..." autocomplete="off" oninput="handleRealtimeSearch()">
                 <button class="clear-search-btn" onclick="clearSearchInput()">✕</button>
             </div>
-            <ul id="db-results-list">
-                <!-- Live-Filterergebnisse erscheinen hier -->
-            </ul>
+            <ul id="db-results-list"></ul>
         </div>
     </div>
 
-    <!-- LIVE-LISTE (IMMER SICHTBAR) -->
+    <!-- LIVE LIST -->
     <div class="list-container">
         <div class="list-header">
             <span>📋 Live-Deckliste</span>
@@ -342,9 +311,9 @@
         <ul id="card-list-ui"></ul>
     </div>
 
-    <!-- SCANNER BUTTON & COUNTER -->
+    <!-- CONTROLS & EXPORTS (PERMANENT SICHTBAR) -->
     <div class="controls-panel">
-        <div class="main-action-row">
+        <div class="main-action-row" id="scanner-controls-row">
             <button id="scan-btn" onclick="captureAndScan()" disabled>
                 ◉ ABDRUCK SCANNEN
             </button>
@@ -354,7 +323,6 @@
             </div>
         </div>
         
-        <!-- EXPORTS -->
         <div class="export-row">
             <button class="export-btn gemini" onclick="exportGemini()">✨ Gemini Prompt</button>
             <button class="export-btn ydk" onclick="exportYDK()">🔻 YGOPro .YDK</button>
@@ -369,7 +337,7 @@
     </div>
 
     <script>
-        let currentMode = 'scanner'; // 'scanner' oder 'database'
+        let currentMode = 'scanner';
         let video = document.getElementById('camera-feed');
         let tunnelHole = document.getElementById('tunnel-hole');
         let tunnelLabel = document.getElementById('tunnel-label-txt');
@@ -378,6 +346,7 @@
         let scannerView = document.getElementById('scanner-view');
         let databaseView = document.getElementById('database-view');
         let scanBtn = document.getElementById('scan-btn');
+        let scannerControlsRow = document.getElementById('scanner-controls-row');
         let dbSearchInput = document.getElementById('db-search-input');
         let dbResultsList = document.getElementById('db-results-list');
         
@@ -386,7 +355,6 @@
         let videoTrack = null;
         let torchEnabled = false;
 
-        // Vollständiger In-Memory Index (DE + EN)
         let dbIndex = []; 
 
         const renderCanvas = document.createElement('canvas');
@@ -401,17 +369,17 @@
             const f = success ? 1046 : 220;
             osc.frequency.setValueAtTime(f, audioCtx.currentTime);
             if (success) {
-                osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.1);
+                osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.08);
             } else {
                 osc.frequency.setValueAtTime(180, audioCtx.currentTime + 0.06);
             }
             gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (success ? 0.1 : 0.12));
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (success ? 0.08 : 0.1));
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start();
-            osc.stop(audioCtx.currentTime + (success ? 0.1 : 0.12));
-            if (navigator.vibrate) navigator.vibrate(success ? 45 : [30, 40, 30]);
+            osc.stop(audioCtx.currentTime + (success ? 0.08 : 0.1));
+            if (navigator.vibrate) navigator.vibrate(success ? 40 : [30, 40, 30]);
         }
 
         function triggerFlash(success = true, msg = "") {
@@ -429,7 +397,6 @@
             }, 1200);
         }
 
-        // MODUS WECHSELN
         function switchMode(mode) {
             currentMode = mode;
             if (mode === 'scanner') {
@@ -437,14 +404,14 @@
                 document.getElementById('tab-database').classList.remove('active');
                 scannerView.style.display = 'flex';
                 databaseView.style.display = 'none';
-                scanBtn.style.display = 'flex';
-                document.getElementById('sub-title-txt').innerText = "Scanner Modus";
+                scannerControlsRow.style.display = 'flex';
+                document.getElementById('sub-title-txt').innerText = "Scanner Bereit";
             } else {
                 document.getElementById('tab-scanner').classList.remove('active');
                 document.getElementById('tab-database').classList.add('active');
                 scannerView.style.display = 'none';
                 databaseView.style.display = 'flex';
-                scanBtn.style.display = 'none'; // Im DB-Modus tippt man direkt auf die Plus-Buttons
+                scannerControlsRow.style.display = 'none';
                 document.getElementById('sub-title-txt').innerText = "DB Suche (DE / EN)";
                 dbSearchInput.focus();
                 handleRealtimeSearch();
@@ -461,7 +428,7 @@
                 const cap = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
                 if (cap.torch) torchBtn.style.display = 'flex';
             } catch (err) {
-                alert("Kamera nicht verfügbar: " + err.message);
+                alert("Kamera-Fehler: " + err.message);
             }
         }
 
@@ -472,11 +439,13 @@
             torchBtn.style.background = torchEnabled ? 'rgba(255, 183, 3, 0.4)' : 'rgba(20, 24, 35, 0.85)';
         }
 
-        // OFFLINE INDEXED-DB FÜR ALLE DEUTSCHEN & ENGLISCHEN KARTEN
         function openDB() {
             return new Promise((resolve, reject) => {
-                const req = indexedDB.open('YGOScannerDB', 1);
-                req.onupgradeneeded = () => req.result.createObjectStore('cards');
+                const req = indexedDB.open('YGOScannerDB', 2);
+                req.onupgradeneeded = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('cards')) db.createObjectStore('cards');
+                };
                 req.onsuccess = () => resolve(req.result);
                 req.onerror = () => reject(req.error);
             });
@@ -494,14 +463,14 @@
 
                 if (cached && cached.length > 0) {
                     dbIndex = cached;
+                    document.getElementById('sub-title-txt').innerText = "DB Bereit (" + dbIndex.length + ")";
                     return;
                 }
 
-                // 1. Englische Karten
+                document.getElementById('sub-title-txt').innerText = "Lade DB...";
                 const resEn = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php');
                 const dataEn = await resEn.json();
 
-                // 2. Deutsche Karten
                 const resDe = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de');
                 const dataDe = await resDe.json();
 
@@ -539,8 +508,10 @@
 
                 const tx = idb.transaction('cards', 'readwrite');
                 tx.objectStore('cards').put(dbIndex, 'all_cards');
+                document.getElementById('sub-title-txt').innerText = "DB Bereit (" + dbIndex.length + ")";
             } catch (e) {
-                console.warn("DB-Ladefehler:", e);
+                console.warn("DB Fehler:", e);
+                document.getElementById('sub-title-txt').innerText = "DB Offline";
             }
         }
 
@@ -561,13 +532,13 @@
         loadComprehensiveDatabase();
         initOCR();
 
-        // ECHTZEIT-FILTERUNG FÜR DIE MANUELLE SUCHE (< 3ms)
+        // MANUELLE REALTIME SUCHE
         function handleRealtimeSearch() {
             const query = normalize(dbSearchInput.value.trim());
             dbResultsList.innerHTML = '';
 
             if (query.length < 2) {
-                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:12px; text-align:center; padding:20px;">Mindestens 2 Buchstaben eingeben...</li>';
+                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:11px; text-align:center; padding:15px;">Mindestens 2 Buchstaben eingeben...</li>';
                 return;
             }
 
@@ -576,25 +547,24 @@
                 const c = dbIndex[i];
                 if (c.clean.includes(query)) {
                     matches.push(c);
-                    if (matches.length >= 40) break; // Begrenzung auf 40 Treffer für flüssiges 60 FPS Scrollen
+                    if (matches.length >= 35) break;
                 }
             }
 
             if (matches.length === 0) {
-                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:12px; text-align:center; padding:20px;">Keine Karte gefunden.</li>';
+                dbResultsList.innerHTML = '<li style="color:#64748b; font-size:11px; text-align:center; padding:15px;">Keine Karte gefunden.</li>';
                 return;
             }
 
-            // Rendert ausschließlich Namen + Plus-Button
             matches.forEach(card => {
                 const li = document.createElement('li');
                 li.className = 'db-result-item';
                 li.innerHTML = `
-                    <div class="db-card-info">
-                        <span class="db-card-name">${escapeHtml(card.realName)}</span>
-                        <span class="db-card-tag">${card.lang} • ${card.isExtra ? 'Extra Deck' : 'Main Deck'}</span>
+                    <div>
+                        <div class="db-card-name">${escapeHtml(card.realName)}</div>
+                        <div class="db-card-tag">${card.lang} • ${card.isExtra ? 'Extra Deck' : 'Main'}</div>
                     </div>
-                    <button class="db-add-btn" title="Zur Liste hinzufügen">＋</button>
+                    <button class="db-add-btn" title="Hinzufügen">＋</button>
                 `;
                 li.querySelector('.db-add-btn').onclick = () => addCardFromDb(card);
                 dbResultsList.appendChild(li);
@@ -613,12 +583,12 @@
             updateUI();
         }
 
-        // SCANNER LOGIC MIT FUZZY-GATEKEEPER
+        // SCANNER MIT MULTI-PASS FILTER FÜR HOLO / FOIL / SECRET RARE
         async function captureAndScan() {
             if (!worker || video.videoWidth === 0 || scanBtn.disabled) return;
 
             scanBtn.disabled = true;
-            scanBtn.innerText = "⏳ ERKENNE...";
+            scanBtn.innerText = "⏳ SCANNE...";
 
             try {
                 const cW = scannerView.clientWidth;
@@ -646,15 +616,44 @@
 
                 debugCanvas.width = cropW * 2;
                 debugCanvas.height = cropH * 2;
-                const dCtx = debugCanvas.getContext('2d');
+                const dCtx = debugCanvas.getContext('2d', { willReadFrequently: true });
                 dCtx.imageSmoothingEnabled = true;
                 dCtx.imageSmoothingQuality = 'high';
                 dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
 
-                const result = await worker.recognize(debugCanvas);
-                const raw = (result.data.text || '').trim();
+                // PASS 1: Reines Kamerabild
+                let result = await worker.recognize(debugCanvas);
+                let matchedCard = matchCardFuzzy(result.data.text || '');
 
-                const matchedCard = matchCardFuzzy(raw);
+                // PASS 2: Falls Holo / Glanz -> High-Contrast Graustufen
+                if (!matchedCard) {
+                    const imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
+                    const d = imgData.data;
+                    for (let i = 0; i < d.length; i += 4) {
+                        let lum = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
+                        // Spreizung des Kontrasts gegen Folienreflexion
+                        lum = lum < 110 ? Math.max(0, lum * 0.5) : Math.min(255, lum * 1.3);
+                        d[i] = d[i+1] = d[i+2] = lum;
+                    }
+                    dCtx.putImageData(imgData, 0, 0);
+
+                    result = await worker.recognize(debugCanvas);
+                    matchedCard = matchCardFuzzy(result.data.text || '');
+                }
+
+                // PASS 3: Falls Secret Rare / Gold Foil Schrift -> Invertierung
+                if (!matchedCard) {
+                    const imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
+                    const d = imgData.data;
+                    for (let i = 0; i < d.length; i += 4) {
+                        let inv = 255 - d[i];
+                        d[i] = d[i+1] = d[i+2] = inv;
+                    }
+                    dCtx.putImageData(imgData, 0, 0);
+
+                    result = await worker.recognize(debugCanvas);
+                    matchedCard = matchCardFuzzy(result.data.text || '');
+                }
 
                 if (matchedCard) {
                     playFeedbackSound(true);
@@ -663,7 +662,7 @@
                     updateUI();
                 } else {
                     playFeedbackSound(false);
-                    triggerFlash(false, "Nicht erkannt – Fokus halten");
+                    triggerFlash(false, "Kein Treffer (Holo glänzt?)");
                 }
             } catch(e) {
                 console.warn(e);
@@ -674,16 +673,28 @@
             }
         }
 
+        // TOLERANTER FUZZY-MATCHER FÜR HOLO-EFFEKTE (60% Schwelle + Token Match)
         function matchCardFuzzy(rawText) {
             const query = normalize(rawText);
             if (query.length < 3) return null;
 
-            // 1. Exakter Treffer
+            // 1. Exakter Match
             for (let i = 0; i < dbIndex.length; i++) {
                 if (dbIndex[i].clean === query) return dbIndex[i];
             }
 
-            // 2. Ähnlichkeitssuche
+            // 2. Token / Wortstamm Match (z. B. "sudelkreisch", "kashtira", "fenrir")
+            const words = rawText.toLowerCase().replace(/[^a-zäöüß]/g, ' ').split(/\s+/).filter(w => w.length >= 5);
+            for (const w of words) {
+                for (let i = 0; i < dbIndex.length; i++) {
+                    if (dbIndex[i].clean.includes(w)) {
+                        const sim = computeSimilarity(query, dbIndex[i].clean);
+                        if (sim >= 0.55) return dbIndex[i];
+                    }
+                }
+            }
+
+            // 3. Globale Ähnlichkeitssuche
             let bestCard = null;
             let highestSim = 0;
 
@@ -696,7 +707,8 @@
                 }
             }
 
-            if (highestSim >= 0.72) {
+            // Schwelle für Holo-Toleranz auf 0.60 gesenkt
+            if (highestSim >= 0.60) {
                 return bestCard;
             }
 
@@ -731,7 +743,6 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        // LIST UI & MANAGEMENT
         function updateUI() {
             document.getElementById('card-counter').innerText = cardList.length;
             const uiList = document.getElementById('card-list-ui');
@@ -761,18 +772,10 @@
         }
 
         function clearList() {
-            if(confirm('Liste wirklich leeren?')) {
+            if(confirm('Deckliste wirklich leeren?')) {
                 cardList = [];
                 updateUI();
             }
-        }
-
-        function showLoading(text) {
-            document.getElementById('loading-text').innerText = text;
-            document.getElementById('loading-overlay').style.display = 'flex';
-        }
-        function hideLoading() {
-            document.getElementById('loading-overlay').style.display = 'none';
         }
 
         function getAggregatedList() {
@@ -781,10 +784,58 @@
             return Object.entries(counts).map(([name, qty]) => `${qty}x ${name}`).join('\n');
         }
 
+        // PERFEKTER GEMINI PROMPT EXPORT
         function exportGemini() {
-            if(cardList.length === 0) return alert("Liste ist leer!");
-            const prompt = "Bitte analysiere diese Yu-Gi-Oh! Deckliste und gib mir Empfehlungen für Synergien und passende Ergänzungen:\n\n" + getAggregatedList();
-            navigator.clipboard.writeText(prompt).then(() => alert("Gemini Prompt in Zwischenablage kopiert!"));
+            if (cardList.length === 0) return alert("Liste ist leer!");
+            
+            const cardListText = getAggregatedList();
+            
+            const prompt = `Du bist ein Weltklasse Yu-Gi-Oh! Deckbau-Experte, Turnierspieler und Chef-Stratege.
+Ich habe dir hier eine Liste von Yu-Gi-Oh! Karten aus meiner physischen Sammlung übergeben, die ich gerade mit meinem Scanner erfasst habe:
+
+=== MEINE GESCANNTEN KARTEN ===
+${cardListText}
+================================
+
+Deine Aufgabe ist es, diese Kartensammlung zu analysieren, fehlende Synergie-Karten online zu ermitteln, Mengen/Ratios dynamisch auszubalancieren (3x für Starter, 1x für Garnets/Suchziele) und mich in einem strukturierten, interaktiven Prozess zu einem schlagkräftigen End-Deck zu führen.
+
+Gehe dazu exakt in folgenden Schritten vor:
+
+---
+### SCHRITT 1: STRATEGIE- & CORE-ANALYSE
+1. Identifiziere die vorhandenen Archetypen, Starter, Extender, Bossmonster und Synergien in meiner Sammlung.
+2. Wenn die Kartenbasis unvollständig ist: Ermittle dynamisch, welche Mengenverhältnisse (Ratios) der vorhandenen Karten am meisten Sinn ergeben.
+
+---
+### SCHRITT 2: INTERAKTIVES FOLLOW-UP (WICHTIG – NOCH KEIN KOMPLETTES DECK AUSGEBEN!)
+Bevor du das finale Deck erstellst, stelle mir direkt im Anschluss an Schritt 1 diese 3 konkreten Entscheidungsfragen:
+
+1. **Regelsatz & Extra-Deck-Einschränkungen:**
+   - Welches Format spielen wir (z. B. Modernes TCG Advanced, Master Duel, Edison / Retro-Format)?
+   - Welche Extra-Deck-Mechaniken sind erlaubt oder erwünscht? (Mit Link? Mit Xyz? Mit Synchro? Mit Fusionen & Ritualen? Oder ein bestimmtes Extra-Deck gar nicht?)
+
+2. **Strategie-Auswahl (Verzweigungen):**
+   - Falls meine gescannte Kartenliste mehrere verschiedene Strategien oder Archetype-Kombinationen ermöglicht: Schlage mir 2 bis 3 konkrete, spielbare Richtungen vor (z. B. Option A: Reinrassiges Combo/Going-First, Option B: Control/Grind-Game, Option C: Aggressive Hybrid-Variante), inklusive kurzer Begründung ihrer Stärken.
+
+3. **Verfügbarer Kartenpool (2 Optionen für mein weiteres Vorgehen):**
+   - Frage mich, ob ich:
+     - **Option A:** Möchte, dass du frei die weltweit besten Meta- und Synergie-Karten ergänzt, um das Deck auf 40–42 Main-Deck- und 15 Extra-Deck-Karten zu perfektionieren.
+     - **Option B:** Dir im nächsten Prompt eine zusätzliche Liste meiner verfügbaren Zauber-, Fallen- und Extra-Deck-Karten aus meiner Sammlung übergeben soll, damit du das Deck primär aus meinem existierenden Fundus baust.
+
+---
+### SCHRITT 3: DIE REGEL FÜR DAS FINALE DECK (Gilt für deine Antwort nach meinem Follow-up!)
+Sobald ich deine Fragen beantwortet habe, erstellst du die fertige Deckliste nach folgenden Vorgaben:
+- Ein turnierlegales 40-42 Karten Main-Deck und 15-Karten Extra-Deck.
+- **KENNZEICHNUNG MIT DREI STERNEN (***):** Jede einzelne Karte, die **NICHT** in meiner ursprünglich oben gescannten Liste stand (also Karten, die ich noch ertauschen oder kaufen muss), MUSS zwingend so formatiert werden:
+  \`*** [Menge]x [Kartenname] ***\` (z. B. \`*** 3x Aschenblüte & Freudiger Frühling ***\` oder \`*** 1x S:P Kleine Ritterin ***\`).
+  Karten aus meiner ursprünglichen Liste bleiben ganz normal ohne Sterne stehen.
+- Kurze Erklärung der primären 1- und 2-Karten-Combos und des Endboards.
+
+Beginne JETZT mit SCHRITT 1 und stelle mir direkt die Fragen aus SCHRITT 2!`;
+
+            navigator.clipboard.writeText(prompt).then(() => {
+                alert("✨ Gemini-Prompt in die Zwischenablage kopiert!\n\nFüge ihn einfach bei Gemini ein.");
+            });
         }
 
         function exportTXT() {
@@ -817,8 +868,7 @@
 
         async function exportYDK() {
             if(cardList.length === 0) return alert("Liste ist leer!");
-            showLoading("Erstelle .YDK Datei...");
-
+            
             let mainDeckIds = [];
             let extraDeckIds = [];
 
@@ -828,8 +878,6 @@
                     else mainDeckIds.push(card.id);
                 }
             }
-
-            hideLoading();
 
             let ydk = "#created by YGO Instant Scanner\n#main\n";
             mainDeckIds.forEach(id => ydk += id + "\n");

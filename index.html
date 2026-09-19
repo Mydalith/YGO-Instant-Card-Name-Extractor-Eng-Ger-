@@ -19,7 +19,6 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         
-        /* FIX FÜR MOBILE DISPLAYHÖHE */
         body { 
             background-color: var(--bg-dark); 
             color: var(--text-light); 
@@ -78,7 +77,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
-        /* VIEW CONTAINER (Feste proportionale Höhe) */
+        /* VIEW CONTAINER */
         .view-wrapper {
             position: relative;
             height: 34%;
@@ -168,7 +167,7 @@
         .db-add-btn { background: #22293a; border: 1px solid #3b4661; color: var(--primary); width: 28px; height: 28px; border-radius: 6px; font-size: 16px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; flex-shrink: 0; }
         .db-add-btn:active { background: var(--primary); color: #000; }
 
-        /* LIVE LIST AREA (FLEX-GROW, SCROLLBAR) */
+        /* LIVE LIST AREA */
         .list-container { 
             flex: 1; 
             min-height: 80px;
@@ -192,13 +191,49 @@
         }
         .clear-btn { color: #f87171; background: none; border: none; font-size: 10px; cursor: pointer; }
         #card-list-ui { flex: 1; overflow-y: auto; padding: 6px 8px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
-        .card-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
-        .card-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
-        .card-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-qty { background: rgba(255,183,3,0.18); color: var(--primary); padding: 1px 5px; border-radius: 4px; font-weight: bold; font-size: 10px; flex-shrink: 0; }
-        .delete-item-btn { color: #718096; background: none; border: none; font-size: 13px; padding: 0 4px; cursor: pointer; }
+        
+        .card-item { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            background: rgba(255,255,255,0.04); 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            font-size: 12px; 
+        }
+        .card-left { display: flex; align-items: center; gap: 6px; overflow: hidden; flex: 1; margin-right: 6px; }
+        .card-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+        .card-qty { background: rgba(255,183,3,0.18); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; flex-shrink: 0; min-width: 26px; text-align: center; }
+        
+        /* SCHNELLE + / - BUTTONS */
+        .qty-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .qty-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #1e2638;
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.1s ease;
+        }
+        .qty-btn:active { transform: scale(0.9); }
+        .qty-btn.minus { color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
+        .qty-btn.minus:active { background: #f87171; color: #000; }
+        .qty-btn.plus { color: #34d399; border-color: rgba(52, 211, 153, 0.3); }
+        .qty-btn.plus:active { background: #34d399; color: #000; }
 
-        /* CONTROLS & EXPORT PANEL (GARANTIERT SICHTBAR AM DISPLAY-ENDE) */
+        /* CONTROLS & EXPORT PANEL */
         .controls-panel { 
             padding: 6px 10px calc(8px + env(safe-area-inset-bottom)) 10px; 
             background: var(--bg-dark); 
@@ -311,7 +346,7 @@
         <ul id="card-list-ui"></ul>
     </div>
 
-    <!-- CONTROLS & EXPORTS (PERMANENT SICHTBAR) -->
+    <!-- CONTROLS & EXPORTS -->
     <div class="controls-panel">
         <div class="main-action-row" id="scanner-controls-row">
             <button id="scan-btn" onclick="captureAndScan()" disabled>
@@ -583,7 +618,7 @@
             updateUI();
         }
 
-        // SCANNER MIT MULTI-PASS FILTER FÜR HOLO / FOIL / SECRET RARE
+        // SCANNER MIT MULTI-PASS FILTER
         async function captureAndScan() {
             if (!worker || video.videoWidth === 0 || scanBtn.disabled) return;
 
@@ -621,17 +656,14 @@
                 dCtx.imageSmoothingQuality = 'high';
                 dCtx.drawImage(renderCanvas, cropX, cropY, cropW, cropH, 0, 0, debugCanvas.width, debugCanvas.height);
 
-                // PASS 1: Reines Kamerabild
                 let result = await worker.recognize(debugCanvas);
                 let matchedCard = matchCardFuzzy(result.data.text || '');
 
-                // PASS 2: Falls Holo / Glanz -> High-Contrast Graustufen
                 if (!matchedCard) {
                     const imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
                     const d = imgData.data;
                     for (let i = 0; i < d.length; i += 4) {
                         let lum = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
-                        // Spreizung des Kontrasts gegen Folienreflexion
                         lum = lum < 110 ? Math.max(0, lum * 0.5) : Math.min(255, lum * 1.3);
                         d[i] = d[i+1] = d[i+2] = lum;
                     }
@@ -641,7 +673,6 @@
                     matchedCard = matchCardFuzzy(result.data.text || '');
                 }
 
-                // PASS 3: Falls Secret Rare / Gold Foil Schrift -> Invertierung
                 if (!matchedCard) {
                     const imgData = dCtx.getImageData(0, 0, debugCanvas.width, debugCanvas.height);
                     const d = imgData.data;
@@ -673,17 +704,14 @@
             }
         }
 
-        // TOLERANTER FUZZY-MATCHER FÜR HOLO-EFFEKTE (60% Schwelle + Token Match)
         function matchCardFuzzy(rawText) {
             const query = normalize(rawText);
             if (query.length < 3) return null;
 
-            // 1. Exakter Match
             for (let i = 0; i < dbIndex.length; i++) {
                 if (dbIndex[i].clean === query) return dbIndex[i];
             }
 
-            // 2. Token / Wortstamm Match (z. B. "sudelkreisch", "kashtira", "fenrir")
             const words = rawText.toLowerCase().replace(/[^a-zäöüß]/g, ' ').split(/\s+/).filter(w => w.length >= 5);
             for (const w of words) {
                 for (let i = 0; i < dbIndex.length; i++) {
@@ -694,7 +722,6 @@
                 }
             }
 
-            // 3. Globale Ähnlichkeitssuche
             let bestCard = null;
             let highestSim = 0;
 
@@ -707,7 +734,6 @@
                 }
             }
 
-            // Schwelle für Holo-Toleranz auf 0.60 gesenkt
             if (highestSim >= 0.60) {
                 return bestCard;
             }
@@ -743,6 +769,7 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
+        // LIST UI MIT PLUS & MINUS BUTTONS
         function updateUI() {
             document.getElementById('card-counter').innerText = cardList.length;
             const uiList = document.getElementById('card-list-ui');
@@ -751,21 +778,41 @@
             
             uiList.innerHTML = '';
             for (const [name, qty] of Object.entries(counts)) {
+                const encodedName = encodeURIComponent(name);
                 uiList.innerHTML += `
                     <li class="card-item">
                         <div class="card-left">
                             <span class="card-qty">${qty}x</span>
                             <span class="card-name-txt">${escapeHtml(name)}</span>
                         </div>
-                        <button class="delete-item-btn" onclick="removeSingleCard('${name.replace(/'/g, "\\'")}')">✕</button>
+                        <div class="qty-controls">
+                            <button class="qty-btn minus" onclick="decrementCard(decodeURIComponent('${encodedName}'))" title="Ein Exemplar entfernen">−</button>
+                            <button class="qty-btn plus" onclick="incrementCard(decodeURIComponent('${encodedName}'))" title="Ein Exemplar hinzufügen">+</button>
+                        </div>
                     </li>`;
             }
             uiList.scrollTop = uiList.scrollHeight;
         }
 
-        function removeSingleCard(cardName) {
+        // SCHNELLES ERHÖHEN (+1)
+        function incrementCard(cardName) {
+            // Finde das zugehörige Karten-Objekt aus cardList oder dbIndex
+            let cardObj = cardList.find(c => c.realName === cardName);
+            if (!cardObj) {
+                cardObj = dbIndex.find(c => c.realName === cardName);
+            }
+            if (cardObj) {
+                playFeedbackSound(true);
+                cardList.push(cardObj);
+                updateUI();
+            }
+        }
+
+        // SCHNELLES VERRINGERN (-1 / Löschen bei 0)
+        function decrementCard(cardName) {
             const idx = cardList.map(c => c.realName).lastIndexOf(cardName);
             if (idx !== -1) {
+                playFeedbackSound(false);
                 cardList.splice(idx, 1);
                 updateUI();
             }
